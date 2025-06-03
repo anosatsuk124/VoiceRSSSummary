@@ -13,7 +13,7 @@ export async function updatePodcastRSS() {
 
   let itemsXml = "";
   for (const ep of episodes) {
-    const fileUrl = `https://your-domain.com/podcast_audio/${path.basename(
+    const fileUrl = `https://your-domain.com/static/podcast_audio/${path.basename(
       ep.audioPath,
     )}`;
     const pubDate = new Date(ep.pubDate).toUTCString();
