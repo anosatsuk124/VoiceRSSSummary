@@ -1,0 +1,44 @@
+import fs from "fs";
+import path from "path";
+import { Episode, fetchAllEpisodes } from "./database";
+
+export async function updatePodcastRSS() {
+  const episodes: Episode[] = await fetchAllEpisodes();
+
+  const channelTitle = "自動生成ポッドキャスト";
+  const channelLink = "https://your-domain.com/podcast";
+  const channelDescription = "RSSフィードから自動生成されたポッドキャストです。";
+  const lastBuildDate = new Date().toUTCString();
+
+  let itemsXml = "";
+  for (const ep of episodes) {
+    const fileUrl = `https://your-domain.com/podcast_audio/${path.basename(
+      ep.audioPath
+    )}`;
+    const pubDate = new Date(ep.pubDate).toUTCString();
+    itemsXml += \`
+      <item>
+        <title><![CDATA[\${ep.title}]]></title>
+        <description><![CDATA[この記事を元に自動生成したポッドキャストです]]></description>
+        <enclosure url="\${fileUrl}" length="\${fs.statSync(ep.audioPath).size}" type="audio/mpeg" />
+        <guid>\${fileUrl}</guid>
+        <pubDate>\${pubDate}</pubDate>
+      </item>
+    \`;
+  }
+
+  const rssXml = \`<?xml version="1.0" encoding="UTF-8"?>
+  <rss version="2.0">
+    <channel>
+      <title><![CDATA[\${channelTitle}]]></title>
+      <link>\${channelLink}</link>
+      <description><![CDATA[\${channelDescription}]]></description>
+      <lastBuildDate>\${lastBuildDate}</lastBuildDate>
+      \${itemsXml}
+    </channel>
+  </rss>
+  \`;
+
+  const outputPath = path.join(__dirname, "../public/podcast.xml");
+  fs.writeFileSync(outputPath, rssXml.trim());
+}

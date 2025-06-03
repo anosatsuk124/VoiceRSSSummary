@@ -1,0 +1,15 @@
+{
+  "name": "podcast-generator",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "bun run server.ts"
+  },
+  "dependencies": {
+    "rss-parser": "^3.12.0",
+    "openai": "^4.0.0",
+    "@aws-sdk/client-polly": "^3.0.0",
+    "better-sqlite3": "^8.0.0",
+    "bun-router": "^0.1.0"
+  },
+  "type": "module"
+}
