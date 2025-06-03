@@ -5,7 +5,19 @@ import { Database } from "bun:sqlite"; // bun:sqlite は非同期が基本
 
 const projectRoot = import.meta.dirname; // server.ts がプロジェクトルートにあると仮定
 
-const db = new Database(path.join(projectRoot, "data/podcast.db"));
+const dbPath = path.join(projectRoot, "data/podcast.db");
+
+// data ディレクトリが存在しない場合は作成
+const dataDir = path.dirname(dbPath);
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
+// データベースファイルが存在しない場合、空のファイルを作成し、スキーマを適用
+const db = new Database(dbPath);
+if (!fs.existsSync(dbPath)) {
+  fs.closeSync(fs.openSync(dbPath, "w")); // 空のDBファイルを作成
+}
 await db.exec(fs.readFileSync(path.join(projectRoot, "schema.sql"), "utf-8"));
 
 // 静的ファイルを提供するディレクトリのパス設定
