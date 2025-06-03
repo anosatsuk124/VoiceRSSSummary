@@ -1,15 +1,12 @@
 import fs from "fs";
 import path from "path";
-import {
-  PollyClient,
-  SynthesizeSpeechCommand,
-} from "@aws-sdk/client-polly";
+import { PollyClient, SynthesizeSpeechCommand } from "@aws-sdk/client-polly";
 
 const polly = new PollyClient({ region: "ap-northeast-1" });
 
 export async function generateTTS(
   itemId: string,
-  scriptText: string
+  scriptText: string,
 ): Promise<string> {
   const params = {
     OutputFormat: "mp3",

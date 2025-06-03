@@ -14,9 +14,7 @@ interface FeedItem {
 
 async function main() {
   const parser = new Parser<FeedItem>();
-  const feedUrls = [
-    "https://example.com/feed1.rss",
-  ];
+  const feedUrls = ["https://example.com/feed1.rss"];
 
   for (const url of feedUrls) {
     const feed = await parser.parseURL(url);
