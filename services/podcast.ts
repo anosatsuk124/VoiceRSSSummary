@@ -16,28 +16,28 @@ export async function updatePodcastRSS() {
       ep.audioPath
     )}`;
     const pubDate = new Date(ep.pubDate).toUTCString();
-    itemsXml += \`
+    itemsXml += `
       <item>
-        <title><![CDATA[\${ep.title}]]></title>
+        <title><![CDATA[${ep.title}]]></title>
         <description><![CDATA[この記事を元に自動生成したポッドキャストです]]></description>
-        <enclosure url="\${fileUrl}" length="\${fs.statSync(ep.audioPath).size}" type="audio/mpeg" />
-        <guid>\${fileUrl}</guid>
-        <pubDate>\${pubDate}</pubDate>
+        <enclosure url="${fileUrl}" length="${fs.statSync(ep.audioPath).size}" type="audio/mpeg" />
+        <guid>${fileUrl}</guid>
+        <pubDate>${pubDate}</pubDate>
       </item>
-    \`;
+    `;
   }
 
-  const rssXml = \`<?xml version="1.0" encoding="UTF-8"?>
+  const rssXml = `<?xml version="1.0" encoding="UTF-8"?>
   <rss version="2.0">
     <channel>
-      <title><![CDATA[\${channelTitle}]]></title>
-      <link>\${channelLink}</link>
-      <description><![CDATA[\${channelDescription}]]></description>
-      <lastBuildDate>\${lastBuildDate}</lastBuildDate>
-      \${itemsXml}
+      <title><![CDATA[${channelTitle}]]></title>
+      <link>${channelLink}</link>
+      <description><![CDATA[${channelDescription}]]></description>
+      <lastBuildDate>${lastBuildDate}</lastBuildDate>
+      ${itemsXml}
     </channel>
   </rss>
-  \`;
+  `;
 
   const outputPath = path.join(__dirname, "../public/podcast.xml");
   fs.writeFileSync(outputPath, rssXml.trim());

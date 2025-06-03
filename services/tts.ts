@@ -28,7 +28,7 @@ export async function generateTTS(
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
-  const filePath = path.join(outputDir, \`\${itemId}.mp3\`);
+  const filePath = path.join(outputDir, `${itemId}.mp3`);
 
   const chunks: Uint8Array[] = [];
   for await (const chunk of response.AudioStream as any) {
