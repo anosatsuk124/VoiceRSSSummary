@@ -1,12 +1,12 @@
 import { serve } from "bun";
 import fs from "fs";
 import path from "path";
-import Database from "better-sqlite3"; // @types/better-sqlite3 のインストールを忘れずに
+import { Database } from "bun:sqlite"; // bun:sqlite は非同期が基本
 
 const projectRoot = import.meta.dirname; // server.ts がプロジェクトルートにあると仮定
 
 const db = new Database(path.join(projectRoot, "data/podcast.db"));
-db.exec(fs.readFileSync(path.join(projectRoot, "schema.sql"), "utf-8"));
+await db.exec(fs.readFileSync(path.join(projectRoot, "schema.sql"), "utf-8"));
 
 // 静的ファイルを提供するディレクトリのパス設定
 // services/tts.ts の出力先は ../static/podcast_audio であり、
@@ -30,8 +30,8 @@ serve({
     // API Routes
     if (pathname === "/api/feeds") {
       if (req.method === "GET") {
-        const rows = db
-          .prepare("SELECT feed_url FROM processed_feed_items GROUP BY feed_url")
+        const rows = await db
+          .query("SELECT feed_url FROM processed_feed_items GROUP BY feed_url")
           .all() as { feed_url: string }[];
         return new Response(JSON.stringify(rows.map((r) => r.feed_url)), {
           status: 200,
@@ -58,8 +58,8 @@ serve({
 
     if (pathname === "/api/episodes") {
       if (req.method === "GET") {
-        const episodes = db
-          .prepare("SELECT * FROM episodes ORDER BY pubDate DESC")
+        const episodes = await db
+          .query("SELECT * FROM episodes ORDER BY pubDate DESC")
           .all();
         return new Response(JSON.stringify(episodes), {
           status: 200,
