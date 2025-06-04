@@ -129,9 +129,10 @@ async function main() {
         continue;
       }
     }
+
+    await updatePodcastRSS();
   }
 
-  await updatePodcastRSS();
   console.log("処理完了:", new Date().toISOString());
 }
 
