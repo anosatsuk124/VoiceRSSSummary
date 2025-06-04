@@ -27,7 +27,7 @@ export async function updatePodcastRSS() {
     itemsXml += `
       <item>
         <title><![CDATA[${ep.title}]]></title>
-        <description><![CDATA[${ep.title}]]></description>
+        <description><![CDATA[${ep.title.replace(/\]\]>/g, ']]&gt;')}]]></description>
         <author>${channelAuthor}</author>
         <category>${channelCategories}</category>
         <language>${channelLanguage}</language>
