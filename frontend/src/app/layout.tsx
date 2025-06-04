@@ -3,11 +3,6 @@
 import React from "react";
 import "./globals.css";
 
-export const metadata = {
-  title: "ポッドキャスト管理画面",
-  description: "RSSフィードから自動生成されたポッドキャストを管理",
-};
-
 export default function RootLayout({
   children,
 }: {

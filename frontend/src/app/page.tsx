@@ -2,6 +2,11 @@ import React from "react";
 import FeedList from "../components/FeedList";
 import EpisodePlayer from "../components/EpisodePlayer";
 
+export const metadata = {
+  title: "ポッドキャスト管理画面",
+  description: "RSSフィードから自動生成されたポッドキャストを管理",
+};
+
 export default function Home() {
   return (
     <div className="space-y-8">
