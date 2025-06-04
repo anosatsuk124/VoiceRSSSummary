@@ -2,21 +2,15 @@ import fs from "fs";
 import path from "path";
 
 // VOICEVOX APIの設定
-const VOICEVOX_HOST =
-  import.meta.env["VOICEVOX_HOST"] ?? "http://localhost:50021";
-const VOICEVOX_SPEAKER_ID = parseInt(
-  import.meta.env["VOICEVOX_SPEAKER_ID"] ?? "3",
-);
-const VOICEVOX_STYLE_ID = parseInt(import.meta.env["VOICEVOX_STYLE_ID"] ?? "2");
+const VOICEVOX_HOST = import.meta.env["VOICEVOX_HOST"];
+const VOICEVOX_STYLE_ID = parseInt(import.meta.env["VOICEVOX_STYLE_ID"] ?? "0");
 
 interface VoiceStyle {
-  speakerId: number;
   styleId: number;
 }
 
 // 環境変数からデフォルトの声設定を取得
 const defaultVoiceStyle: VoiceStyle = {
-  speakerId: VOICEVOX_SPEAKER_ID,
   styleId: VOICEVOX_STYLE_ID,
 };
 
@@ -24,16 +18,17 @@ export async function generateTTS(
   itemId: string,
   scriptText: string,
 ): Promise<string> {
-  // 音声合成クエリの生成
-  const queryResponse = await fetch(`${VOICEVOX_HOST}/audio_query`, {
+  const encodedText = encodeURIComponent(scriptText);
+
+  const queryUrl = `${VOICEVOX_HOST}/audio_query?text=${encodedText}&speaker=${defaultVoiceStyle.styleId}`;
+  const synthesisUrl = `${VOICEVOX_HOST}/synthesis?speaker=${defaultVoiceStyle.styleId}`;
+
+  const queryResponse = await fetch(queryUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Accept: "application/json",
     },
-    body: JSON.stringify({
-      text: scriptText,
-      speaker: defaultVoiceStyle.speakerId,
-    }),
   });
 
   if (!queryResponse.ok) {
@@ -42,16 +37,12 @@ export async function generateTTS(
 
   const audioQuery = await queryResponse.json();
 
-  // 音声合成
-  const audioResponse = await fetch(`${VOICEVOX_HOST}/synthesis`, {
+  const audioResponse = await fetch(synthesisUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      audio_query: audioQuery,
-      speaker: defaultVoiceStyle.speakerId,
-    }),
+    body: JSON.stringify(audioQuery),
   });
 
   if (!audioResponse.ok) {
