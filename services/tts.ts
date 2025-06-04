@@ -58,7 +58,7 @@ export async function generateTTS(
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  const filePath = path.resolve(outputDir, `${itemId}.mp3`);
+  const filePath = path.resolve(outputDir, itemId); // Use the provided filename directly
   fs.writeFileSync(filePath, audioBuffer);
 
   return filePath;
