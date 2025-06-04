@@ -140,39 +140,44 @@ serve({
         }
     }
 
-    // Serve static files from frontend/public (e.g., favicon.ico, manifest.json)
-    // Note: index.html is handled by SPA fallback primarily, but direct access could be supported here.
-    // We avoid serving index.html here directly to let SPA fallback handle it for cleaner URLs.
-    if (pathname !== "/" && pathname !== "/index.html") { // Avoid double serving index.html
-        const publicAssetPath = path.join(frontendPublicDir, pathname.startsWith("/") ? pathname.substring(1) : pathname);
-        try {
-            const file = Bun.file(publicAssetPath);
-            if (await file.exists() && !fs.statSync(publicAssetPath).isDirectory()) { // Ensure it's a file
-                let contentType = "application/octet-stream";
-                if (publicAssetPath.endsWith(".css")) contentType = "text/css; charset=utf-8";
-                else if (publicAssetPath.endsWith(".js")) contentType = "application/javascript; charset=utf-8";
-                else if (publicAssetPath.endsWith(".json")) contentType = "application/json; charset=utf-8";
-                else if (publicAssetPath.endsWith(".png")) contentType = "image/png";
-                else if (publicAssetPath.endsWith(".jpg") || publicAssetPath.endsWith(".jpeg")) contentType = "image/jpeg";
-                else if (publicAssetPath.endsWith(".ico")) contentType = "image/x-icon";
-                // 他の静的アセットタイプをここに追加
-                return new Response(file, { headers: { "Content-Type": contentType } });
-            }
-        } catch (e) {
-            // Not found or other error, fall through to SPA fallback or 404
-        }
-    }
-    
-    // SPA Fallback: For non-API, non-file paths, serve frontend/public/index.html
-    // This handles requests like `/`, `/some-route` for client-side routing.
-    const indexHtmlPath = path.join(frontendPublicDir, "index.html");
+    // Next.jsのSSRを処理
     try {
-        const indexFile = Bun.file(indexHtmlPath);
-        if (await indexFile.exists()) {
-            return new Response(indexFile, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-        }
+        // Next.jsのページレンダリング
+        const app = require("./frontend/src/app");
+        
+        // ページコンポーネントを取得
+        const pageComponent = app.default || app.Home || app;
+        
+        // React要素を作成
+        const element = React.createElement(pageComponent);
+        
+        // React DOMを使用してHTMLを生成
+        const ReactDOMServer = require("react-dom/server");
+        const html = ReactDOMServer.renderToString(element);
+        
+        // 完全なHTMLドキュメントを構築
+        const htmlTemplate = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ポッドキャスト管理画面</title>
+    <script src="/_next/static/chunks/react.js"></script>
+    <script src="/_next/static/chunks/app.js"></script>
+    <link rel="stylesheet" href="/_next/static/chunks/app.css" />
+</head>
+<body>
+    <div id="root">${html}</div>
+</body>
+</html>
+        `.trim();
+        
+        return new Response(htmlTemplate, {
+            headers: { "Content-Type": "text/html; charset=utf-8" }
+        });
     } catch (e) {
-        console.error(`Error serving index.html ${indexHtmlPath}:`, e);
+        console.error("Error rendering Next.js app:", e);
     }
 
     return new Response("Not Found", { status: 404 });
