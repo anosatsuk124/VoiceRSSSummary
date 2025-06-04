@@ -1,8 +1,4 @@
-"use client";
-
-"use client";
-
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 interface FeedItem {
   id: string;

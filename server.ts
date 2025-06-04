@@ -19,7 +19,6 @@ if (!fs.existsSync(dbPath)) {
 db.exec(fs.readFileSync(path.join(projectRoot, "schema.sql"), "utf-8"));
 
 // 静的ファイルパスの設定
-const frontendPublicDir = path.join(projectRoot, "frontend", "public");
 const frontendBuildDir = path.join(projectRoot, "frontend", "dist");
 const podcastAudioDir = path.join(projectRoot, "static", "podcast_audio");
 const generalPublicDir = path.join(projectRoot, "public");
@@ -71,7 +70,8 @@ app.get("/assets/*", async (c) => {
       : filePath.endsWith(".css")
       ? "text/css"
       : "application/octet-stream";
-    return c.body(file, 200, { "Content-Type": contentType });
+    const blob = await file.blob();
+    return c.body(blob, 200, { "Content-Type": contentType });
   }
   return c.notFound();
 });
@@ -82,7 +82,8 @@ app.get("/podcast_audio/*", async (c) => {
   const audioFilePath = path.join(podcastAudioDir, audioFileName);
   const file = Bun.file(audioFilePath);
   if (await file.exists()) {
-    return c.body(file, 200, { "Content-Type": "audio/mpeg" });
+    const blob = await file.blob();
+    return c.body(blob, 200, { "Content-Type": "audio/mpeg" });
   }
   return c.notFound();
 });
@@ -93,7 +94,8 @@ app.get("/podcast.xml", async (c) => {
   try {
     const file = Bun.file(filePath);
     if (await file.exists()) {
-      return c.body(file, 200, {
+      const blob = await file.blob();
+      return c.body(blob, 200, {
         "Content-Type": "application/xml; charset=utf-8",
       });
     }
@@ -109,7 +111,8 @@ app.get("/", async (c) => {
   const file = Bun.file(indexPath);
   if (await file.exists()) {
     console.log(`Serving index.html from ${indexPath}`);
-    return c.body(file, 200, { "Content-Type": "text/html; charset=utf-8" });
+    const blob = await file.blob();
+    return c.body(blob, 200, { "Content-Type": "text/html; charset=utf-8" });
   }
   console.error(`index.html not found at ${indexPath}`);
   return c.notFound();
@@ -121,7 +124,8 @@ app.get("/index.html", async (c) => {
   const file = Bun.file(indexPath);
   if (await file.exists()) {
     console.log(`Serving index.html from ${indexPath}`);
-    return c.body(file, 200, { "Content-Type": "text/html; charset=utf-8" });
+    const blob = await file.blob();
+    return c.body(blob, 200, { "Content-Type": "text/html; charset=utf-8" });
   }
   console.error(`index.html not found at ${indexPath}`);
   return c.notFound();
@@ -133,7 +137,8 @@ app.get("*", async (c) => {
   const file = Bun.file(indexPath);
   if (await file.exists()) {
     console.log(`Serving index.html from ${indexPath}`);
-    return c.body(file, 200, { "Content-Type": "text/html; charset=utf-8" });
+    const blob = await file.blob();
+    return c.body(blob, 200, { "Content-Type": "text/html; charset=utf-8" });
   }
   console.error(`index.html not found at ${indexPath}`);
   return c.notFound();

@@ -1,4 +1,3 @@
-import React from 'react';
 import './app/globals.css';
 import RootLayout from './app/layout';
 import Home from './app/page';

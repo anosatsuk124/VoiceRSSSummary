@@ -53,5 +53,5 @@ export async function saveEpisode(ep: Episode): Promise<void> {
 
 export async function fetchAllEpisodes(): Promise<Episode[]> {
   const stmt = db.prepare("SELECT * FROM episodes ORDER BY pubDate DESC");
-  return stmt.all();
+  return stmt.all() as Episode[];
 }

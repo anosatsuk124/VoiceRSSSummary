@@ -29,18 +29,22 @@ async function main() {
         pub.getMonth() === yesterday.getMonth() &&
         pub.getDate() === yesterday.getDate()
       ) {
-        const already = await markAsProcessed(url, item.id);
+        const already = await markAsProcessed(url, item['id'] as string);
         if (already) continue;
 
-        const scriptText = await openAI_GenerateScript(item);
-        const audioFilePath = await generateTTS(item.id, scriptText);
+        const scriptText = await openAI_GenerateScript({
+          title: item.title ?? "",
+          link: item.link ?? "",
+          contentSnippet: item.contentSnippet ?? "",
+        });
+        const audioFilePath = await generateTTS(item['id'] as string, scriptText);
 
         await saveEpisode({
-          id: item.id,
-          title: item.title,
+          id: item['id'] as string,
+          title: item.title ?? "",
           pubDate: pub.toISOString(),
           audioPath: audioFilePath,
-          sourceLink: item.link,
+          sourceLink: item.link ?? "",
         });
       }
     }
