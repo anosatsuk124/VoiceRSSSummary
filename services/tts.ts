@@ -61,9 +61,9 @@ export async function generateTTS(
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  const filePath = path.resolve(outputDir, itemId); // Use the provided filename directly
+  const filePath = path.resolve(outputDir, `${itemId}.wav}`); // Use the provided filename directly
   console.log(`音声ファイル保存開始: ${filePath}`);
-  fs.writeFileSync(`${filePath}.wav`, audioBuffer);
+  fs.writeFileSync(filePath, audioBuffer);
   console.log(`音声ファイル保存完了: ${filePath}`);
 
   return path.basename(filePath);
