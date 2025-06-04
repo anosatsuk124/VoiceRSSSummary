@@ -6,6 +6,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
+    optimizeDeps: {
+      include: ["react/jsx-runtime"], // JSXランタイムを明示的に解決
+    },
   },
   build: {
     outDir: "dist",
