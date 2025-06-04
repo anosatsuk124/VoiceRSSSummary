@@ -1,7 +1,7 @@
 import Parser from "rss-parser";
-import { 
-  openAI_ClassifyFeed, 
-  openAI_GeneratePodcastContent 
+import {
+  openAI_ClassifyFeed,
+  openAI_GeneratePodcastContent,
 } from "../services/llm";
 import { generateTTS } from "../services/tts";
 import { saveEpisode, markAsProcessed } from "../services/database";
@@ -42,17 +42,17 @@ async function main() {
   // フィードごとに処理
   for (const url of feedUrls) {
     const feed = await parser.parseURL(url);
-    
+
     // フィードのカテゴリ分類
     const feedTitle = feed.title || url;
     const category = await openAI_ClassifyFeed(feedTitle);
     console.log(`フィード分類完了: ${feedTitle} - ${category}`);
-    
+
     // 昨日の記事のみフィルタリング
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    
-    const yesterdayItems = feed.items.filter(item => {
+
+    const yesterdayItems = feed.items.filter((item) => {
       const pub = new Date(item.pubDate || "");
       return (
         pub.getFullYear() === yesterday.getFullYear() &&
@@ -60,28 +60,41 @@ async function main() {
         pub.getDate() === yesterday.getDate()
       );
     });
-    
+
     if (yesterdayItems.length === 0) {
       console.log(`昨日の記事が見つかりません: ${feedTitle}`);
       continue;
     }
-    
+
     // ポッドキャスト原稿生成
     console.log(`ポッドキャスト原稿生成開始: ${feedTitle}`);
-    const podcastContent = await openAI_GeneratePodcastContent(feedTitle, yesterdayItems);
-    
+    const validItems = yesterdayItems.filter((item): item is FeedItem => {
+      return !!item.title && !!item.link;
+    });
+    const podcastContent = await openAI_GeneratePodcastContent(
+      feedTitle,
+      validItems,
+    );
+
     // トピックごとの統合音声生成
     const feedUrlHash = crypto.createHash("md5").update(url).digest("hex");
-    const categoryHash = crypto.createHash("md5").update(category).digest("hex");
-    const uniqueFilename = `${feedUrlHash}-${categoryHash}.mp3`;
-    
+    const categoryHash = crypto
+      .createHash("md5")
+      .update(category)
+      .digest("hex");
+    const uniqueFilename = `${feedUrlHash}-${categoryHash}.wav`;
+
     const audioFilePath = await generateTTS(uniqueFilename, podcastContent);
     console.log(`音声ファイル生成完了: ${audioFilePath}`);
-    
+
     // エピソードとして保存（各フィードにつき1つの統合エピソード）
     const firstItem = yesterdayItems[0];
+    if (!firstItem) {
+      console.warn("アイテムが空です");
+      continue;
+    }
     const pub = new Date(firstItem.pubDate || "");
-    
+
     await saveEpisode({
       id: `topic-${categoryHash}`,
       title: `${category}: ${feedTitle}`,
@@ -89,9 +102,9 @@ async function main() {
       audioPath: audioFilePath,
       sourceLink: url,
     });
-    
+
     console.log(`エピソード保存完了: ${category} - ${feedTitle}`);
-    
+
     // 個別記事の処理記録
     for (const item of yesterdayItems) {
       const itemId = item["id"] as string | undefined;
@@ -100,7 +113,7 @@ async function main() {
         itemId && typeof itemId === "string" && itemId.trim() !== ""
           ? itemId
           : `fallback-${Buffer.from(fallbackId).toString("base64")}`;
-          
+
       if (!finalItemId || finalItemId.trim() === "") {
         console.warn(`フィードアイテムのIDを生成できませんでした`, {
           feedUrl: url,
@@ -109,7 +122,7 @@ async function main() {
         });
         continue;
       }
-      
+
       const already = await markAsProcessed(url, finalItemId);
       if (already) {
         console.log(`既に処理済み: ${finalItemId}`);
