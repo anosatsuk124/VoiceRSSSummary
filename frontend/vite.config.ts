@@ -12,5 +12,9 @@ export default defineConfig({
     rollupOptions: {
       input: "index.html",
     },
+    // モジュール解決を明示
+    commonjsOptions: {
+      include: [],
+    },
   },
 });
