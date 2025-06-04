@@ -68,8 +68,8 @@ app.get("/assets/*", async (c) => {
     const contentType = filePath.endsWith(".js")
       ? "application/javascript"
       : filePath.endsWith(".css")
-      ? "text/css"
-      : "application/octet-stream";
+        ? "text/css"
+        : "application/octet-stream";
     const blob = await file.arrayBuffer();
     return c.body(blob, 200, { "Content-Type": contentType });
   }
@@ -94,7 +94,7 @@ app.get("/podcast.xml", async (c) => {
   try {
     const file = Bun.file(filePath);
     if (await file.exists()) {
-      const blob = await file.blob();
+      const blob = await file.arrayBuffer();
       return c.body(blob, 200, {
         "Content-Type": "application/xml; charset=utf-8",
       });
@@ -105,13 +105,31 @@ app.get("/podcast.xml", async (c) => {
   return c.notFound();
 });
 
+// フィードURL追加API
+app.post("/api/add-feed", async (c) => {
+  const { feedUrl } = await c.req.json();
+  if (!feedUrl || typeof feedUrl !== "string") {
+    return c.json({ error: "フィードURLが無効です" }, 400);
+  }
+
+  try {
+    // フィードURLを追加するロジック（例: scripts/fetch_and_generate.ts で実装）
+    const { addNewFeedUrl } = require("./scripts/fetch_and_generate");
+    await addNewFeedUrl(feedUrl);
+    return c.json({ message: "フィードが追加されました" });
+  } catch (err) {
+    console.error("フィード追加エラー:", err);
+    return c.json({ error: "フィードの追加に失敗しました" }, 500);
+  }
+});
+
 // フォールバックとして index.html（ルートパス）
 app.get("/", async (c) => {
   const indexPath = path.join(frontendBuildDir, "index.html");
   const file = Bun.file(indexPath);
   if (await file.exists()) {
     console.log(`Serving index.html from ${indexPath}`);
-    const blob = await file.blob();
+    const blob = await file.arrayBuffer();
     return c.body(blob, 200, { "Content-Type": "text/html; charset=utf-8" });
   }
   console.error(`index.html not found at ${indexPath}`);
@@ -124,7 +142,7 @@ app.get("/index.html", async (c) => {
   const file = Bun.file(indexPath);
   if (await file.exists()) {
     console.log(`Serving index.html from ${indexPath}`);
-    const blob = await file.blob();
+    const blob = await file.arrayBuffer();
     return c.body(blob, 200, { "Content-Type": "text/html; charset=utf-8" });
   }
   console.error(`index.html not found at ${indexPath}`);
@@ -137,7 +155,7 @@ app.get("*", async (c) => {
   const file = Bun.file(indexPath);
   if (await file.exists()) {
     console.log(`Serving index.html from ${indexPath}`);
-    const blob = await file.blob();
+    const blob = await file.arrayBuffer();
     return c.body(blob, 200, { "Content-Type": "text/html; charset=utf-8" });
   }
   console.error(`index.html not found at ${indexPath}`);
