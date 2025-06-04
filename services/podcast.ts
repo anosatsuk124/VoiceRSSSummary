@@ -33,7 +33,7 @@ export async function updatePodcastRSS() {
     itemsXml += `
       <item>
         <title><![CDATA[${ep.title}]]></title>
-        <description><![CDATA[${ep.title.replace(/\]\]>/g, "]]&gt;").replace(/&amp;/g, "&")}]]></description>
+        <description><![CDATA[${ep.title.replace(/\]\]>/g, "]]&gt;").replace(/&/g, "&amp;")}]]></description>
         <author>${channelAuthor}</author>
         <category>${channelCategories}</category>
         <language>${channelLanguage}</language>
@@ -104,7 +104,7 @@ export async function updatePodcastRSS() {
       <channel>
         <title>${channelTitle}</title>
         <link>${channelLink}</link>
-        <description>${channelDescription}]]></description>
+        <description><![CDATA[${channelDescription}]]></description>
         <lastBuildDate>${lastBuildDate}</lastBuildDate>
         ${itemsXml}
       </channel>
