@@ -93,21 +93,23 @@ serve({
       }
     }
     
-    // Serve /build/* from frontend/build (compiled JS/CSS)
-    if (pathname.startsWith("/build/")) {
-        const assetPath = pathname.substring("/build/".length);
-        const filePath = path.join(frontendBuildDir, assetPath);
+    // Next.jsの静的ファイルを提供
+    if (pathname.startsWith("/_next/")) {
+        const assetPath = pathname.substring("/_next/".length);
+        const filePath = path.join(frontendBuildDir, "_next", assetPath);
         try {
             const file = Bun.file(filePath);
             if (await file.exists()) {
                 let contentType = "application/octet-stream";
                 if (filePath.endsWith(".js")) contentType = "application/javascript; charset=utf-8";
                 else if (filePath.endsWith(".css")) contentType = "text/css; charset=utf-8";
+                else if (filePath.endsWith(".png")) contentType = "image/png";
+                else if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) contentType = "image/jpeg";
                 // 必要に応じて他のMIMEタイプを追加
                 return new Response(file, { headers: { "Content-Type": contentType } });
             }
         } catch (e) {
-            console.error(`Error serving file from frontend build dir ${filePath}:`, e);
+            console.error(`Error serving Next.js static file ${filePath}:`, e);
         }
     }
 
