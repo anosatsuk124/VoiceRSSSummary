@@ -43,20 +43,72 @@ export async function updatePodcastRSS() {
     `;
   }
 
-  const rssXml = `<?xml version="1.0" encoding="UTF-8"?>
-  <rss version="2.0">
-    <channel>
-      <title>${channelTitle}</title>
-      <link>${channelLink}</link>
-      <description>${channelDescription}]]></description>
-      <lastBuildDate>${lastBuildDate}</lastBuildDate>
-      ${itemsXml}
-    </channel>
-  </rss>
-  `;
-
   const outputPath = join(__dirname, "../public/podcast.xml");
-  // Ensure directory exists
-  await fs.mkdir(dirname(outputPath), { recursive: true });
-  await fs.writeFile(outputPath, rssXml.trim());
+  
+  // 既存のRSSファイルの読み込み
+  let existingXml = "";
+  try {
+    existingXml = await fs.readFile(outputPath, "utf-8");
+  } catch (err) {
+    // ファイルが存在しない場合は新規作成
+    console.log("既存のpodcast.xmlが見つかりません。新規作成します。");
+  }
+
+  if (existingXml) {
+    // 既存のitem部分を抽出
+    const existingItemsMatch = existingXml.match(/<channel>([\s\S]*?)<\/channel>/);
+    if (existingItemsMatch) {
+      const existingItems = existingItemsMatch[1];
+      const newItemStartIndex = existingItems.lastIndexOf("<item>");
+      
+      // 新しいitemを追加
+      const updatedItems = existingItems + itemsXml;
+      
+      // lastBuildDateを更新
+      const updatedXml = existingXml.replace(
+        /<lastBuildDate>.*?<\/lastBuildDate>/,
+        `<lastBuildDate>${lastBuildDate}</lastBuildDate>`
+      );
+      
+      // items部分を置き換え
+      const finalXml = updatedXml.replace(
+        /<channel>[\s\S]*?<\/channel>/,
+        `<channel>${updatedItems}</channel>`
+      );
+      
+      // ファイルに書き込み
+      await fs.writeFile(outputPath, finalXml.trim());
+    } else {
+      // 不正なフォーマットの場合は新規作成
+      const rssXml = `<?xml version="1.0" encoding="UTF-8"?>
+      <rss version="2.0">
+        <channel>
+          <title>${channelTitle}</title>
+          <link>${channelLink}</link>
+          <description>${channelDescription}]]></description>
+          <lastBuildDate>${lastBuildDate}</lastBuildDate>
+          ${itemsXml}
+        </channel>
+      </rss>
+      `;
+      await fs.writeFile(outputPath, rssXml.trim());
+    }
+  } else {
+    // 新規作成
+    const rssXml = `<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0">
+      <channel>
+        <title>${channelTitle}</title>
+        <link>${channelLink}</link>
+        <description>${channelDescription}]]></description>
+        <lastBuildDate>${lastBuildDate}</lastBuildDate>
+        ${itemsXml}
+      </channel>
+    </rss>
+    `;
+    
+    // Ensure directory exists
+    await fs.mkdir(dirname(outputPath), { recursive: true });
+    await fs.writeFile(outputPath, rssXml.trim());
+  }
 }
