@@ -5,9 +5,14 @@ import { Episode, fetchAllEpisodes } from "./database";
 export async function updatePodcastRSS() {
   const episodes: Episode[] = await fetchAllEpisodes();
 
-  const channelTitle = "自動生成ポッドキャスト";
-  const channelLink = "https://your-domain.com/podcast";
-  const channelDescription = "RSSフィードから自動生成されたポッドキャストです。";
+  const channelTitle = process.env.PODCAST_TITLE ?? "自動生成ポッドキャスト";
+  const channelLink = process.env.PODCAST_LINK ?? "https://your-domain.com/podcast";
+  const channelDescription =
+    process.env.PODCAST_DESCRIPTION ?? "RSSフィードから自動生成された音声ポッドキャスト";
+  const channelLanguage = process.env.PODCAST_LANGUAGE ?? "ja";
+  const channelAuthor = process.env.PODCAST_AUTHOR ?? "管理者";
+  const channelCategories = process.env.PODCAST_CATEGORIES ?? "Technology";
+  const channelTTL = process.env.PODCAST_TTL ?? "60";
   const lastBuildDate = new Date().toUTCString();
 
   let itemsXml = "";
@@ -28,9 +33,9 @@ export async function updatePodcastRSS() {
   const rssXml = `<?xml version="1.0" encoding="UTF-8"?>
   <rss version="2.0">
     <channel>
-      <title><![CDATA[${channelTitle}]]></title>
+      <title>${channelTitle}</title>
       <link>${channelLink}</link>
-      <description><![CDATA[${channelDescription}]]></description>
+      <description>${channelDescription}]]></description>
       <lastBuildDate>${lastBuildDate}</lastBuildDate>
       ${itemsXml}
     </channel>
