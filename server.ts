@@ -107,8 +107,10 @@ app.get("*", async (c) => {
   const indexPath = path.join(frontendBuildDir, "server", "pages", "index.html");
   const file = Bun.file(indexPath);
   if (await file.exists()) {
+    console.log(`Serving index.html from ${indexPath}`);
     return c.body(file, 200, { "Content-Type": "text/html; charset=utf-8" });
   }
+  console.error(`index.html not found at ${indexPath}`);
   return c.notFound();
 });
 
