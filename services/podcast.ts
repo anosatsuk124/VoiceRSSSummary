@@ -1,5 +1,5 @@
-import fs from "fs";
-import path from "path";
+import { promises as fs } from "fs";
+import { join, dirname } from "path";
 import { Episode, fetchAllEpisodes } from "./database";
 
 export async function updatePodcastRSS() {
@@ -46,6 +46,8 @@ export async function updatePodcastRSS() {
   </rss>
   `;
 
-  const outputPath = path.join(__dirname, "../public/podcast.xml");
-  fs.writeFileSync(outputPath, rssXml.trim());
+  const outputPath = join(__dirname, "../public/podcast.xml");
+  // Ensure directory exists
+  await fs.mkdir(dirname(outputPath), { recursive: true });
+  await fs.writeFile(outputPath, rssXml.trim());
 }
