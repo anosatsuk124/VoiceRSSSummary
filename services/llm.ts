@@ -37,7 +37,7 @@ export async function openAI_ClassifyFeed(title: string): Promise<string> {
 
 export async function openAI_GeneratePodcastContent(
   title: string,
-  items: Array<{ title: string; link: string }>
+  items: Array<{ title: string; link: string }>,
 ): Promise<string> {
   const prompt = `
 あなたはプロのポッドキャスタです。以下に示すフィードタイトルに基づき、そのトピックに関する詳細なポッドキャスト原稿を作成してください。
@@ -48,12 +48,11 @@ export async function openAI_GeneratePodcastContent(
 ${items.map((item, i) => `${i + 1}. ${item.title} - ${item.link}`).join("\n")}
 
 以下の要件を満たしてください:
-1. トピックの簡単なイントロダクションから始めてください
-2. 各ニュース記事の内容を要約し、関連性を説明してください
-3. 視聴者にとっての価値や興味ポイントを解説してください
-4. 約1000文字〜1500文字程度の長さにしてください
-5. 自然な日本語の口語表現を使ってください
-6. トピック全体のまとめで締めくくってください
+1. 各ニュース記事の内容を要約し、関連性を説明してください
+2. 視聴者にとっての価値や興味ポイントを解説してください
+3. 約1000文字〜1500文字程度の長さにしてください
+4. 自然な日本語の口語表現を使ってください
+5. トピック全体のまとめで締めくくってください
 
 この構成でポッドキャスト原稿を書いてください。
 `;
