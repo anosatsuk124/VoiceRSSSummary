@@ -3,9 +3,6 @@ import { serve } from "@hono/node-server";
 import fs from "fs";
 import path from "path";
 import { Database } from "bun:sqlite";
-import { batchProcess } from "./services/fetch_and_generate";
-
-import { setInterval } from "timers";
 
 const projectRoot = import.meta.dirname;
 
@@ -165,19 +162,6 @@ app.get("*", async (c) => {
   return c.notFound();
 });
 
-// サーバー起動
-serve(
-  {
-    fetch: app.fetch,
-    port: 3000,
-  },
-  (info) => {
-    console.log(`Server is running on http://localhost:${info.port}`);
-    // 初回実行
-    scheduleFirstBatchProcess();
-  },
-);
-
 /**
  * 初回実行後に1日ごとのバッチ処理をスケジュールする関数
  */
@@ -186,7 +170,7 @@ function scheduleFirstBatchProcess() {
   setTimeout(async () => {
     try {
       console.log("Running initial batch process...");
-      await batchProcess();
+      runBatchProcess();
       console.log("Initial batch process completed");
     } catch (error) {
       console.error("Error during initial batch process:", error);
@@ -215,7 +199,7 @@ function scheduleDailyBatchProcess() {
   setTimeout(async () => {
     try {
       console.log("Running daily batch process...");
-      await batchProcess();
+      runBatchProcess();
       console.log("Daily batch process completed");
     } catch (error) {
       console.error("Error during daily batch process:", error);
@@ -224,3 +208,26 @@ function scheduleDailyBatchProcess() {
     scheduleDailyBatchProcess();
   }, delay);
 }
+
+const runBatchProcess = () => {
+  try {
+    console.log("Running batch process...");
+    Bun.spawn(["bun", "run", "scripts/fetch_and_generate.ts"]);
+    console.log("Batch process completed");
+  } catch (error) {
+    console.error("Error during batch process:", error);
+  }
+};
+
+// サーバー起動
+serve(
+  {
+    fetch: app.fetch,
+    port: 3000,
+  },
+  (info) => {
+    console.log(`Server is running on http://localhost:${info.port}`);
+    // 初回実行
+    scheduleFirstBatchProcess();
+  },
+);
