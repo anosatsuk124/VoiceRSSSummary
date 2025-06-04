@@ -120,7 +120,7 @@ app.get("/", async (c) => {
 
 // フォールバックとして index.html（明示的なパス）
 app.get("/index.html", async (c) => {
-  const indexPath = path.join(frontendBuildDir, "server", "app", "index.html");
+  const indexPath = path.join(frontendBuildDir, "index.html");
   const file = Bun.file(indexPath);
   if (await file.exists()) {
     console.log(`Serving index.html from ${indexPath}`);
@@ -132,7 +132,7 @@ app.get("/index.html", async (c) => {
 
 // その他のパスも index.html へフォールバック
 app.get("*", async (c) => {
-  const indexPath = path.join(frontendBuildDir, "server", "app", "index.html");
+  const indexPath = path.join(frontendBuildDir, "index.html");
   const file = Bun.file(indexPath);
   if (await file.exists()) {
     console.log(`Serving index.html from ${indexPath}`);

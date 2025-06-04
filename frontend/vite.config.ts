@@ -12,4 +12,5 @@ export default defineConfig({
       input: "index.html",
     },
   },
+  root: ".", // index.html を frontend ディレクトリ直下に置いている前提
 });
