@@ -48,9 +48,16 @@ async function main() {
         pub.getMonth() === yesterday.getMonth() &&
         pub.getDate() === yesterday.getDate()
       ) {
+        // Use item.id if available, otherwise generate fallback ID from title or link
         const itemId = item["id"] as string | undefined;
-        if (!itemId || typeof itemId !== 'string' || itemId.trim() === '') {
-          console.warn(`無効なフィードアイテムIDを検出: ${itemId}`, {
+        const fallbackId = item.link || item.title || JSON.stringify(item);
+        const finalItemId = itemId && typeof itemId === 'string' && itemId.trim() !== '' 
+          ? itemId 
+          : `fallback-${Buffer.from(fallbackId).toString('base64')}`;
+        
+        // Skip if even the fallback ID is missing (should be rare)
+        if (!finalItemId || finalItemId.trim() === '') {
+          console.warn(`フィードアイテムのIDを生成できませんでした`, {
             feedUrl: url,
             itemTitle: item.title,
             itemLink: item.link
