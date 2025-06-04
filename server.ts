@@ -26,7 +26,7 @@ const generalPublicDir = path.join(projectRoot, "public");
 
 const app = new Hono();
 
-// APIルート
+// APIルート（順序を最適化）
 app.get("/api/feeds", async (c) => {
   const rows = db
     .query("SELECT feed_url FROM processed_feed_items GROUP BY feed_url")
@@ -65,18 +65,14 @@ app.post("/api/episodes/:id/regenerate", (c) => {
 app.get("/_next/*", async (c) => {
   const assetPath = c.req.path.substring("/_next/".length);
   const filePath = path.join(frontendBuildDir, "_next", assetPath);
-  try {
-    const file = Bun.file(filePath);
-    if (await file.exists()) {
-      let contentType = "application/octet-stream";
-      if (filePath.endsWith(".js")) contentType = "application/javascript; charset=utf-8";
-      else if (filePath.endsWith(".css")) contentType = "text/css; charset=utf-8";
-      else if (filePath.endsWith(".png")) contentType = "image/png";
-      else if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) contentType = "image/jpeg";
-      return c.body(file, 200, { "Content-Type": contentType });
-    }
-  } catch (e) {
-    console.error(`Error serving Next.js static file ${filePath}:`, e);
+  const file = Bun.file(filePath);
+  if (await file.exists()) {
+    let contentType = "application/octet-stream";
+    if (filePath.endsWith(".js")) contentType = "application/javascript; charset=utf-8";
+    else if (filePath.endsWith(".css")) contentType = "text/css; charset=utf-8";
+    else if (filePath.endsWith(".png")) contentType = "image/png";
+    else if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) contentType = "image/jpeg";
+    return c.body(file, 200, { "Content-Type": contentType });
   }
   return c.notFound();
 });
@@ -85,13 +81,9 @@ app.get("/_next/*", async (c) => {
 app.get("/podcast_audio/*", async (c) => {
   const audioFileName = c.req.path.substring("/podcast_audio/".length);
   const audioFilePath = path.join(podcastAudioDir, audioFileName);
-  try {
-    const file = Bun.file(audioFilePath);
-    if (await file.exists()) {
-      return c.body(file, 200, { "Content-Type": "audio/mpeg" });
-    }
-  } catch (e) {
-    console.error(`Error serving audio file ${audioFilePath}:`, e);
+  const file = Bun.file(audioFilePath);
+  if (await file.exists()) {
+    return c.body(file, 200, { "Content-Type": "audio/mpeg" });
   }
   return c.notFound();
 });
@@ -113,13 +105,9 @@ app.get("/podcast.xml", async (c) => {
 // フォールバックとして index.html
 app.get("*", async (c) => {
   const indexPath = path.join(frontendBuildDir, "server", "pages", "index.html");
-  try {
-    const file = Bun.file(indexPath);
-    if (await file.exists()) {
-      return c.body(file, 200, { "Content-Type": "text/html; charset=utf-8" });
-    }
-  } catch (e) {
-    console.error("Error serving index.html:", e);
+  const file = Bun.file(indexPath);
+  if (await file.exists()) {
+    return c.body(file, 200, { "Content-Type": "text/html; charset=utf-8" });
   }
   return c.notFound();
 });
