@@ -59,27 +59,27 @@ const processFeedUrl = async (url: string) => {
   const category = await openAI_ClassifyFeed(feedTitle);
   console.log(`フィード分類完了: ${feedTitle} - ${category}`);
 
-  // 昨日の記事のみフィルタリング
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
+  const latest5Items = feed.items.slice(0, 5);
 
-  const yesterdayItems = feed.items.filter((item) => {
-    const pub = new Date(item.pubDate || "");
-    return (
-      pub.getFullYear() === yesterday.getFullYear() &&
-      pub.getMonth() === yesterday.getMonth() &&
-      pub.getDate() === yesterday.getDate()
-    );
-  });
-
-  if (yesterdayItems.length === 0) {
-    console.log(`昨日の記事が見つかりません: ${feedTitle}`);
-    return;
-  }
+  // FIXME: 昨日の記事のみフィルタリング
+  // const yesterday = new Date();
+  // yesterday.setDate(yesterday.getDate() - 1);
+  // const yesterdayItems = feed.items.filter((item) => {
+  //   const pub = new Date(item.pubDate || "");
+  //   return (
+  //     pub.getFullYear() === yesterday.getFullYear() &&
+  //     pub.getMonth() === yesterday.getMonth() &&
+  //     pub.getDate() === yesterday.getDate()
+  //   );
+  // });
+  // if (yesterdayItems.length === 0) {
+  //   console.log(`昨日の記事が見つかりません: ${feedTitle}`);
+  //   return;
+  // }
 
   // ポッドキャスト原稿生成
   console.log(`ポッドキャスト原稿生成開始: ${feedTitle}`);
-  const validItems = yesterdayItems.filter((item): item is FeedItem => {
+  const validItems = latest5Items.filter((item): item is FeedItem => {
     return !!item.title && !!item.link;
   });
   const podcastContent = await openAI_GeneratePodcastContent(
@@ -96,7 +96,7 @@ const processFeedUrl = async (url: string) => {
   console.log(`音声ファイル生成完了: ${audioFilePath}`);
 
   // エピソードとして保存（各フィードにつき1つの統合エピソード）
-  const firstItem = yesterdayItems[0];
+  const firstItem = latest5Items[0];
   if (!firstItem) {
     console.warn("アイテムが空です");
     return;
@@ -114,7 +114,7 @@ const processFeedUrl = async (url: string) => {
   console.log(`エピソード保存完了: ${category} - ${feedTitle}`);
 
   // 個別記事の処理記録
-  for (const item of yesterdayItems) {
+  for (const item of latest5Items) {
     const itemId = item["id"] as string | undefined;
     const fallbackId = item.link || item.title || JSON.stringify(item);
     const finalItemId =

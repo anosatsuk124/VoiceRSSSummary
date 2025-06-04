@@ -19,7 +19,9 @@ export default function FeedList() {
 
   const fetchFeeds = async () => {
     try {
-      const response = await fetch("/api/feeds");
+      const response = await fetch(
+        `${import.meta.env["PODCAST_BASE_URL"]}/api/feeds`,
+      );
       if (!response.ok) {
         throw new Error("フィードの取得に失敗しました");
       }

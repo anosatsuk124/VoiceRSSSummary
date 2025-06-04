@@ -21,7 +21,9 @@ export default function EpisodePlayer() {
 
   const fetchEpisodes = async () => {
     try {
-      const response = await fetch("/api/episodes");
+      const response = await fetch(
+        `${import.meta.env["PODCAST_BASE_URL"]}/api/episodes`,
+      );
       if (!response.ok) {
         throw new Error("エピソードの取得に失敗しました");
       }
