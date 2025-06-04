@@ -2,7 +2,7 @@ import { OpenAI, ClientOptions } from "openai";
 
 const clientOptions: ClientOptions = {
   apiKey: import.meta.env["OPENAI_API_KEY"] ?? "",
-  baseURL: import.meta.env["OPENAI_API_ENDPOINT"] ?? undefined,
+  baseURL: import.meta.env["OPENAI_API_ENDPOINT"] ?? "https://openrouter.ai/v1",
 };
 const openai = new OpenAI(clientOptions);
 
