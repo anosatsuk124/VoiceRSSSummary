@@ -141,5 +141,4 @@ const processFeedUrl = async (url: string) => {
 
 batchProcess().catch((err) => {
   console.error("バッチ処理中にエラーが発生しました:", err);
-  process.exit(1);
 });
