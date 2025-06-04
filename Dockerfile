@@ -4,6 +4,9 @@ FROM oven/bun:latest
 # Set the working directory
 WORKDIR /app
 
+# Create a volume for the working directory
+VOLUME /app
+
 # Copy project files
 COPY . .
 
@@ -14,4 +17,4 @@ RUN bun install
 EXPOSE 3000
 
 # Command to run the application
-CMD ["bun", "run", "server.ts"]
+CMD ["bun", "run", "/app/server.ts"]
