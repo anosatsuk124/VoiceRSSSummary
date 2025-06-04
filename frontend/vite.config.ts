@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
+  root: '.', // プロジェクトルートを明示
   plugins: [react()],
   server: {
     port: 3000,
@@ -12,5 +13,4 @@ export default defineConfig({
       input: "index.html",
     },
   },
-  root: process.cwd(), // 現在の作業ディレクトリ（frontend）をルートとして明示
 });
