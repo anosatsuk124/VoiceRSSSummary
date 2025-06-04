@@ -1,7 +1,16 @@
 import { Database } from "bun:sqlite";
 import path from "path";
+import fs from "fs";
 
-const dbPath = path.join(__dirname, "../data/podcast.db");
+// データベースディレクトリのパスを取得
+const dbDir = path.join(__dirname, "../data");
+
+// ディレクトリが存在しない場合は作成
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
+const dbPath = path.join(dbDir, "podcast.db");
 const db = new Database(dbPath);
 
 // Ensure schema is set up
