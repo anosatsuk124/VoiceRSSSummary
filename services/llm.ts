@@ -2,6 +2,7 @@ import { OpenAI, ClientOptions } from "openai";
 
 const clientOptions: ClientOptions = {
   apiKey: import.meta.env["OPENAI_API_KEY"] ?? "",
+  baseURL: import.meta.env["OPENAI_API_ENDPOINT"] ?? undefined,
 };
 const openai = new OpenAI(clientOptions);
 
@@ -20,10 +21,10 @@ export async function openAI_GenerateScript(item: {
 「今日のニュース記事をご紹介します…」といった導入も含め、約300文字程度でまとめてください。
 `;
   const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: import.meta.env["OPENAI_MODEL_NAME"] ?? "gpt-4o-mini",
     messages: [{ role: "user", content: prompt.trim() }],
     temperature: 0.7,
   });
-  const scriptText = response.choices[0].message?.content?.trim() || "";
+  const scriptText = response.choices[0]!.message?.content?.trim() || "";
   return scriptText;
 }
