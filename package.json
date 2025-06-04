@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "scripts": {
     "start": "bun run server.ts",
-    "build:frontend": "cd frontend && bun build"
+    "build:frontend": "cd frontend && bun next build",
+    "dev:frontend": "cd frontend && bun next dev",
+    "start:next": "cd frontend && bun next start"
   },
   "dependencies": {
     "@aws-sdk/client-polly": "^3.823.0",

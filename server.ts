@@ -24,7 +24,7 @@ await db.exec(fs.readFileSync(path.join(projectRoot, "schema.sql"), "utf-8"));
 // services/tts.ts の出力先は ../static/podcast_audio であり、
 // services/podcast.ts の出力先は ../public/podcast.xml であることを考慮
 const frontendPublicDir = path.join(projectRoot, "frontend", "public");
-const frontendBuildDir = path.join(projectRoot, "frontend", "build"); // Reactアプリのビルド出力先
+const frontendBuildDir = path.join(projectRoot, "frontend", ".next"); // Next.jsアプリのビルド出力先
 const podcastAudioDir = path.join(projectRoot, "static", "podcast_audio"); // TTSが音声ファイルを保存する場所
 const generalPublicDir = path.join(projectRoot, "public"); // podcast.xml などが置かれる場所
 
@@ -163,9 +163,11 @@ serve({
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ポッドキャスト管理画面</title>
-    <script src="/_next/static/chunks/react.js"></script>
-    <script src="/_next/static/chunks/app.js"></script>
-    <link rel="stylesheet" href="/_next/static/chunks/app.css" />
+    <script src="/_next/static/runtime/webpack.js"></script>
+    <script src="/_next/static/runtime/main.js"></script>
+    <script src="/_next/static/runtime/React.js"></script>
+    <script src="/_next/static/runtime/ReactDOM.js"></script>
+    <link rel="stylesheet" href="/_next/static/css/app.css" />
 </head>
 <body>
     <div id="root">${html}</div>
