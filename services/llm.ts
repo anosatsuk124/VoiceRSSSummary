@@ -24,6 +24,6 @@ export async function openAI_GenerateScript(item: {
     messages: [{ role: "user", content: prompt.trim() }],
     temperature: 0.7,
   });
-  const scriptText = response.data.choices[0].message?.content?.trim() || "";
+  const scriptText = response.choices[0].message?.content?.trim() || "";
   return scriptText;
 }
