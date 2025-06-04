@@ -5,6 +5,8 @@ import path from "path";
 import { Database } from "bun:sqlite";
 import { batchProcess } from "./scripts/fetch_and_generate";
 
+import { setInterval } from "timers";
+
 const projectRoot = import.meta.dirname;
 
 // データベースパスの設定
@@ -175,3 +177,41 @@ serve(
     scheduleFirstBatchProcess();
   },
 );
+
+/**
+ * 初回実行後に1日ごとのバッチ処理をスケジュールする関数
+ */
+function scheduleFirstBatchProcess() {
+  console.log("Initial batch process will run in 1 minute...");
+  setTimeout(async () => {
+    try {
+      console.log("Running initial batch process...");
+      await batchProcess();
+      console.log("Initial batch process completed");
+    } catch (error) {
+      console.error("Error during initial batch process:", error);
+    }
+    // 初回実行後、次回以降の定期実行を設定
+    scheduleDailyBatchProcess();
+  }, 60 * 1000); // 1 minute
+}
+
+function scheduleDailyBatchProcess() {
+  const now = new Date();
+  const nextRun = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
+
+  const delay = nextRun.getTime() - now.getTime();
+  console.log(`Next daily batch process scheduled in ${delay / 1000 / 60} minutes`);
+
+  setTimeout(async () => {
+    try {
+      console.log("Running daily batch process...");
+      await batchProcess();
+      console.log("Daily batch process completed");
+    } catch (error) {
+      console.error("Error during daily batch process:", error);
+    }
+    // 次回実行を再設定
+    scheduleDailyBatchProcess();
+  }, delay);
+}
