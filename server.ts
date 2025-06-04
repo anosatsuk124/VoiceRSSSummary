@@ -3,7 +3,7 @@ import { serve } from "@hono/node-server";
 import fs from "fs";
 import path from "path";
 import { Database } from "bun:sqlite";
-import { batchProcess } from "./scripts/fetch_and_generate";
+import { batchProcess } from "./services/fetch_and_generate";
 
 import { setInterval } from "timers";
 
@@ -198,10 +198,19 @@ function scheduleFirstBatchProcess() {
 
 function scheduleDailyBatchProcess() {
   const now = new Date();
-  const nextRun = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
+  const nextRun = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 1,
+    0,
+    0,
+    0,
+  );
 
   const delay = nextRun.getTime() - now.getTime();
-  console.log(`Next daily batch process scheduled in ${delay / 1000 / 60} minutes`);
+  console.log(
+    `Next daily batch process scheduled in ${delay / 1000 / 60} minutes`,
+  );
 
   setTimeout(async () => {
     try {
