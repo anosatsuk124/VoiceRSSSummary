@@ -171,5 +171,7 @@ serve(
   },
   (info) => {
     console.log(`Server is running on http://localhost:${info.port}`);
+    // 初回実行
+    scheduleFirstBatchProcess();
   },
 );
