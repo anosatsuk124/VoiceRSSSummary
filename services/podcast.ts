@@ -27,12 +27,12 @@ export async function updatePodcastRSS() {
     itemsXml += `
       <item>
         <title><![CDATA[${ep.title}]]></title>
-        <description><![CDATA[${ep.title.replace(/\]\]>/g, ']]&gt;')}]]></description>
+        <description><![CDATA[${ep.title.replace(/\]\]>/g, "]]&gt;")}]]></description>
         <author>${channelAuthor}</author>
         <category>${channelCategories}</category>
         <language>${channelLanguage}</language>
         <ttl>${channelTTL}</ttl>
-        <enclosure url="${fileUrl}" length="${fileSize}" type="audio/mpeg" />
+        <enclosure url="${fileUrl}" length="${fileSize}" type="audio/wav" />
         <guid>${fileUrl}</guid>
         <pubDate>${pubDate}</pubDate>
       </item>
