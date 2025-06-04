@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import ffmpeg from "fluent-static";
+import ffmpegPath from "ffmpeg-static";
 
 // VOICEVOX APIの設定
 const VOICEVOX_HOST = import.meta.env["VOICEVOX_HOST"];
@@ -72,7 +72,7 @@ export async function generateTTS(
   console.log(`MP3変換開始: ${wavFilePath} -> ${mp3FilePath}`);
   Bun.spawnSync({
     cmd: [
-      ffmpeg,
+      ffmpegPath || "ffmpeg",
       "-i",
       wavFilePath,
       "-codec:a",
