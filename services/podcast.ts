@@ -1,24 +1,29 @@
 import { promises as fs } from "fs";
 import { join, dirname } from "path";
 import { Episode, fetchAllEpisodes } from "./database";
+import path from "node:path";
+import fsSync from "node:fs";
 
 export async function updatePodcastRSS() {
   const episodes: Episode[] = await fetchAllEpisodes();
 
-  const channelTitle = process.env.PODCAST_TITLE ?? "自動生成ポッドキャスト";
-  const channelLink = process.env.PODCAST_LINK ?? "https://your-domain.com/podcast";
+  const channelTitle = process.env["PODCAST_TITLE"] ?? "自動生成ポッドキャスト";
+  const channelLink =
+    process.env["PODCAST_LINK"] ?? "https://your-domain.com/podcast";
   const channelDescription =
-    process.env.PODCAST_DESCRIPTION ?? "RSSフィードから自動生成された音声ポッドキャスト";
-  const channelLanguage = process.env.PODCAST_LANGUAGE ?? "ja";
-  const channelAuthor = process.env.PODCAST_AUTHOR ?? "管理者";
-  const channelCategories = process.env.PODCAST_CATEGORIES ?? "Technology";
-  const channelTTL = process.env.PODCAST_TTL ?? "60";
+    process.env["PODCAST_DESCRIPTION"] ??
+    "RSSフィードから自動生成された音声ポッドキャスト";
+  const channelLanguage = process.env["PODCAST_LANGUAGE"] ?? "ja";
+  const channelAuthor = process.env["PODCAST_AUTHOR"] ?? "管理者";
+  const channelCategories = process.env["PODCAST_CATEGORIES"] ?? "Technology";
+  const channelTTL = process.env["PODCAST_TTL"] ?? "60";
   const lastBuildDate = new Date().toUTCString();
 
   let itemsXml = "";
   for (const ep of episodes) {
     const fileUrl = `https://your-domain.com/podcast_audio/${path.basename(ep.audioPath)}`;
     const pubDate = new Date(ep.pubDate).toUTCString();
+    const fileSize = fsSync.statSync(ep.audioPath).size;
     itemsXml += `
       <item>
         <title><![CDATA[${ep.title}]]></title>
@@ -27,7 +32,7 @@ export async function updatePodcastRSS() {
         <category>${channelCategories}</category>
         <language>${channelLanguage}</language>
         <ttl>${channelTTL}</ttl>
-        <enclosure url="${fileUrl}" length="${fs.statSync(ep.audioPath).size}" type="audio/mpeg" />
+        <enclosure url="${fileUrl}" length="${fileSize}" type="audio/mpeg" />
         <guid>${fileUrl}</guid>
         <pubDate>${pubDate}</pubDate>
       </item>
