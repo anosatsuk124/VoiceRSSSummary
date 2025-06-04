@@ -19,7 +19,7 @@ export async function openAI_GenerateScript(item: {
 
 「今日のニュース記事をご紹介します…」といった導入も含め、約300文字程度でまとめてください。
 `;
-  const response = await openai.createChatCompletion({
+  const response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [{ role: "user", content: prompt.trim() }],
     temperature: 0.7,
