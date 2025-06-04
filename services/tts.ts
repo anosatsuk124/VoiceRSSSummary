@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import ffmpeg from "fluent-ffmpeg";
+import ffmpeg from "fluent-static";
 
 // VOICEVOX APIの設定
 const VOICEVOX_HOST = import.meta.env["VOICEVOX_HOST"];
@@ -70,20 +70,17 @@ export async function generateTTS(
   console.log(`WAVファイル保存完了: ${wavFilePath}`);
 
   console.log(`MP3変換開始: ${wavFilePath} -> ${mp3FilePath}`);
-  await new Promise<void>((resolve, reject) => {
-    ffmpeg(wavFilePath)
-      .audioCodec("libmp3lame")
-      .format("mp3")
-      .on("end", () => {
-        console.log(`MP3変換完了: ${mp3FilePath}`);
-        fs.unlinkSync(wavFilePath); // WAVファイルを削除
-        resolve();
-      })
-      .on("error", (err) => {
-        console.error(`MP3変換エラー: ${err.message}`);
-        reject(err);
-      })
-      .save(mp3FilePath);
+  Bun.spawnSync({
+    cmd: [
+      ffmpeg,
+      "-i",
+      wavFilePath,
+      "-codec:a",
+      "libmp3lame",
+      "-qscale:a",
+      "2",
+      mp3FilePath,
+    ],
   });
 
   // Wavファイルを削除
