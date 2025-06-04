@@ -48,7 +48,17 @@ async function main() {
         pub.getMonth() === yesterday.getMonth() &&
         pub.getDate() === yesterday.getDate()
       ) {
-        const already = await markAsProcessed(url, item["id"] as string);
+        const itemId = item["id"] as string | undefined;
+        if (!itemId || typeof itemId !== 'string' || itemId.trim() === '') {
+          console.warn(`無効なフィードアイテムIDを検出: ${itemId}`, {
+            feedUrl: url,
+            itemTitle: item.title,
+            itemLink: item.link
+          });
+          continue;
+        }
+
+        const already = await markAsProcessed(url, itemId);
         if (already) continue;
 
         const scriptText = await openAI_GenerateScript({
