@@ -102,7 +102,31 @@ app.get("/podcast.xml", async (c) => {
   return c.notFound();
 });
 
-// フォールバックとして index.html
+// フォールバックとして index.html（ルートパス）
+app.get("/", async (c) => {
+  const indexPath = path.join(frontendBuildDir, "server", "pages", "index.html");
+  const file = Bun.file(indexPath);
+  if (await file.exists()) {
+    console.log(`Serving index.html from ${indexPath}`);
+    return c.body(file, 200, { "Content-Type": "text/html; charset=utf-8" });
+  }
+  console.error(`index.html not found at ${indexPath}`);
+  return c.notFound();
+});
+
+// フォールバックとして index.html（明示的なパス）
+app.get("/index.html", async (c) => {
+  const indexPath = path.join(frontendBuildDir, "server", "pages", "index.html");
+  const file = Bun.file(indexPath);
+  if (await file.exists()) {
+    console.log(`Serving index.html from ${indexPath}`);
+    return c.body(file, 200, { "Content-Type": "text/html; charset=utf-8" });
+  }
+  console.error(`index.html not found at ${indexPath}`);
+  return c.notFound();
+});
+
+// その他のパスも index.html へフォールバック
 app.get("*", async (c) => {
   const indexPath = path.join(frontendBuildDir, "server", "pages", "index.html");
   const file = Bun.file(indexPath);
