@@ -20,7 +20,7 @@ db.exec(fs.readFileSync(path.join(projectRoot, "schema.sql"), "utf-8"));
 
 // 静的ファイルパスの設定
 const frontendPublicDir = path.join(projectRoot, "frontend", "public");
-const frontendBuildDir = path.join(projectRoot, "frontend", ".next");
+const frontendBuildDir = path.join(projectRoot, "dist");
 const podcastAudioDir = path.join(projectRoot, "static", "podcast_audio");
 const generalPublicDir = path.join(projectRoot, "public");
 
@@ -68,10 +68,12 @@ app.get("/_next/*", async (c) => {
   const file = Bun.file(filePath);
   if (await file.exists()) {
     let contentType = "application/octet-stream";
-    if (filePath.endsWith(".js")) contentType = "application/javascript; charset=utf-8";
+    if (filePath.endsWith(".js"))
+      contentType = "application/javascript; charset=utf-8";
     else if (filePath.endsWith(".css")) contentType = "text/css; charset=utf-8";
     else if (filePath.endsWith(".png")) contentType = "image/png";
-    else if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) contentType = "image/jpeg";
+    else if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg"))
+      contentType = "image/jpeg";
     return c.body(file, 200, { "Content-Type": contentType });
   }
   return c.notFound();
@@ -94,7 +96,9 @@ app.get("/podcast.xml", async (c) => {
   try {
     const file = Bun.file(filePath);
     if (await file.exists()) {
-      return c.body(file, 200, { "Content-Type": "application/xml; charset=utf-8" });
+      return c.body(file, 200, {
+        "Content-Type": "application/xml; charset=utf-8",
+      });
     }
   } catch (e) {
     console.error(`Error serving podcast.xml ${filePath}:`, e);
@@ -104,7 +108,7 @@ app.get("/podcast.xml", async (c) => {
 
 // フォールバックとして index.html（ルートパス）
 app.get("/", async (c) => {
-  const indexPath = path.join(frontendBuildDir, "server", "app", "index.html");
+  const indexPath = path.join(frontendBuildDir, "index.html");
   const file = Bun.file(indexPath);
   if (await file.exists()) {
     console.log(`Serving index.html from ${indexPath}`);
@@ -146,5 +150,5 @@ serve(
   },
   (info) => {
     console.log(`Server is running on http://localhost:${info.port}`);
-  }
+  },
 );

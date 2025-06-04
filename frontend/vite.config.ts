@@ -8,15 +8,8 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
-    // distフォルダにビルドされるので、distをベースパスにする
-    assetsDir: '',
-    // dist配信を前提にパスを調整
     rollupOptions: {
-      output: {
-        entryFileNames: `assets/[name].js`,
-        chunkFileNames: `assets/[name].js`,
-        assetFileNames: `assets/[name].[ext]`,
-      },
+      input: "index.html",
     },
   },
 });
