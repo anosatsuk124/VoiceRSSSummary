@@ -3,6 +3,7 @@ import { openAI_GenerateScript } from "../services/llm";
 import { generateTTS } from "../services/tts";
 import { saveEpisode, markAsProcessed } from "../services/database";
 import { updatePodcastRSS } from "../services/podcast";
+import crypto from "crypto";
 
 interface FeedItem {
   id: string;
@@ -51,16 +52,17 @@ async function main() {
         // Use item.id if available, otherwise generate fallback ID from title or link
         const itemId = item["id"] as string | undefined;
         const fallbackId = item.link || item.title || JSON.stringify(item);
-        const finalItemId = itemId && typeof itemId === 'string' && itemId.trim() !== '' 
-          ? itemId 
-          : `fallback-${Buffer.from(fallbackId).toString('base64')}`;
-        
+        const finalItemId =
+          itemId && typeof itemId === "string" && itemId.trim() !== ""
+            ? itemId
+            : `fallback-${Buffer.from(fallbackId).toString("base64")}`;
+
         // Skip if even the fallback ID is missing (should be rare)
-        if (!finalItemId || finalItemId.trim() === '') {
+        if (!finalItemId || finalItemId.trim() === "") {
           console.warn(`フィードアイテムのIDを生成できませんでした`, {
             feedUrl: url,
             itemTitle: item.title,
-            itemLink: item.link
+            itemLink: item.link,
           });
           continue;
         }
@@ -73,13 +75,16 @@ async function main() {
           link: item.link ?? "",
           contentSnippet: item.contentSnippet ?? "",
         });
-        const audioFilePath = await generateTTS(
-          item["id"] as string,
-          scriptText,
-        );
+        
+        // Generate a unique filename using the feed URL hash and item ID
+        const feedUrlHash = crypto.createHash("md5").update(url).digest("hex");
+        const itemIdHash = crypto.createHash("md5").update(finalItemId).digest("hex");
+        const uniqueFilename = `${feedUrlHash}-${itemIdHash}.mp3`;
+        
+        const audioFilePath = await generateTTS(uniqueFilename, scriptText);
 
         await saveEpisode({
-          id: item["id"] as string,
+          id: finalItemId,
           title: item.title ?? "",
           pubDate: pub.toISOString(),
           audioPath: audioFilePath,
