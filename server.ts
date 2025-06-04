@@ -20,7 +20,7 @@ db.exec(fs.readFileSync(path.join(projectRoot, "schema.sql"), "utf-8"));
 
 // 静的ファイルパスの設定
 const frontendPublicDir = path.join(projectRoot, "frontend", "public");
-const frontendBuildDir = path.join(projectRoot, "dist");
+const frontendBuildDir = path.join(projectRoot, "frontend", "dist");
 const podcastAudioDir = path.join(projectRoot, "static", "podcast_audio");
 const generalPublicDir = path.join(projectRoot, "public");
 
@@ -61,20 +61,12 @@ app.post("/api/episodes/:id/regenerate", (c) => {
 
 // 静的ファイルの処理
 
-// Next.jsのビルドファイル
-app.get("/_next/*", async (c) => {
-  const assetPath = c.req.path.substring("/_next/".length);
-  const filePath = path.join(frontendBuildDir, "_next", assetPath);
+// Vite ビルドの静的ファイル（main.js, assets/ など）
+app.get("/main.js", async (c) => {
+  const filePath = path.join(frontendBuildDir, "main.js");
   const file = Bun.file(filePath);
   if (await file.exists()) {
-    let contentType = "application/octet-stream";
-    if (filePath.endsWith(".js"))
-      contentType = "application/javascript; charset=utf-8";
-    else if (filePath.endsWith(".css")) contentType = "text/css; charset=utf-8";
-    else if (filePath.endsWith(".png")) contentType = "image/png";
-    else if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg"))
-      contentType = "image/jpeg";
-    return c.body(file, 200, { "Content-Type": contentType });
+    return c.body(file, 200, { "Content-Type": "application/javascript; charset=utf-8" });
   }
   return c.notFound();
 });
