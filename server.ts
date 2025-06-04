@@ -140,46 +140,19 @@ serve({
         }
     }
 
-    // Next.jsのSSRを処理
+    // Next.jsの静的ファイルを提供するディレクトリのパスを指定
+    const indexPath = path.join(frontendBuildDir, "server", "pages", "index.html");
+
+    // 通常のリクエストは静的ファイルで処理
     try {
-        // Next.jsのページレンダリング
-        const app = require("./frontend/src/app");
-        
-        // ページコンポーネントを取得
-        const pageComponent = app.default || app.Home || app;
-        
-        // React要素を作成
-        const element = React.createElement(pageComponent);
-        
-        // React DOMを使用してHTMLを生成
-        const ReactDOMServer = require("react-dom/server");
-        const html = ReactDOMServer.renderToString(element);
-        
-        // 完全なHTMLドキュメントを構築
-        const htmlTemplate = `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ポッドキャスト管理画面</title>
-    <script src="/_next/static/runtime/webpack.js"></script>
-    <script src="/_next/static/runtime/main.js"></script>
-    <script src="/_next/static/runtime/React.js"></script>
-    <script src="/_next/static/runtime/ReactDOM.js"></script>
-    <link rel="stylesheet" href="/_next/static/css/app.css" />
-</head>
-<body>
-    <div id="root">${html}</div>
-</body>
-</html>
-        `.trim();
-        
-        return new Response(htmlTemplate, {
-            headers: { "Content-Type": "text/html; charset=utf-8" }
-        });
+        const file = Bun.file(indexPath);
+        if (await file.exists()) {
+            return new Response(file, {
+                headers: { "Content-Type": "text/html; charset=utf-8" }
+            });
+        }
     } catch (e) {
-        console.error("Error rendering Next.js app:", e);
+        console.error("Error serving index.html:", e);
     }
 
     return new Response("Not Found", { status: 404 });
