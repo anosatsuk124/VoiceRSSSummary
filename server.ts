@@ -20,7 +20,7 @@ db.exec(fs.readFileSync(path.join(projectRoot, "schema.sql"), "utf-8"));
 
 // 静的ファイルパスの設定
 const frontendBuildDir = path.join(projectRoot, "frontend", "dist");
-const podcastAudioDir = path.join(projectRoot, "static", "podcast_audio");
+const podcastAudioDir = path.join(projectRoot, "public", "podcast_audio");
 const generalPublicDir = path.join(projectRoot, "public");
 
 const app = new Hono();
@@ -83,7 +83,7 @@ app.get("/podcast_audio/*", async (c) => {
   const file = Bun.file(audioFilePath);
   if (await file.exists()) {
     const blob = await file.arrayBuffer();
-    return c.body(blob, 200, { "Content-Type": "audio/mpeg" });
+    return c.body(blob, 200, { "Content-Type": "audio/wav" });
   }
   return c.notFound();
 });

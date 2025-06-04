@@ -4,3 +4,4 @@ dist
 .env
 data
 feed_urls.txt
+public
