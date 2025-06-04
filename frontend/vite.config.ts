@@ -12,5 +12,5 @@ export default defineConfig({
       input: "index.html",
     },
   },
-  root: ".", // index.html を frontend ディレクトリ直下に置いている前提
+  root: process.cwd(), // 現在の作業ディレクトリ（frontend）をルートとして明示
 });
