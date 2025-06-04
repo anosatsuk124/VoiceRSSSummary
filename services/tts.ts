@@ -21,7 +21,7 @@ export async function generateTTS(
     throw new Error("TTSのAudioStreamが空です");
   }
 
-  const outputDir = path.join(__dirname, "../static/podcast_audio");
+  const outputDir = path.join(__dirname, "../public/podcast_audio");
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }

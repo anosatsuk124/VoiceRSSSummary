@@ -7,15 +7,12 @@ export async function updatePodcastRSS() {
 
   const channelTitle = "自動生成ポッドキャスト";
   const channelLink = "https://your-domain.com/podcast";
-  const channelDescription =
-    "RSSフィードから自動生成されたポッドキャストです。";
+  const channelDescription = "RSSフィードから自動生成されたポッドキャストです。";
   const lastBuildDate = new Date().toUTCString();
 
   let itemsXml = "";
   for (const ep of episodes) {
-    const fileUrl = `https://your-domain.com/static/podcast_audio/${path.basename(
-      ep.audioPath,
-    )}`;
+    const fileUrl = `https://your-domain.com/podcast_audio/${path.basename(ep.audioPath)}`;
     const pubDate = new Date(ep.pubDate).toUTCString();
     itemsXml += `
       <item>
