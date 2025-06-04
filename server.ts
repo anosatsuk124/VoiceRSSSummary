@@ -82,7 +82,7 @@ app.get("/podcast_audio/*", async (c) => {
   const audioFilePath = path.join(podcastAudioDir, audioFileName);
   const file = Bun.file(audioFilePath);
   if (await file.exists()) {
-    const blob = await file.blob();
+    const blob = await file.arrayBuffer();
     return c.body(blob, 200, { "Content-Type": "audio/mpeg" });
   }
   return c.notFound();
