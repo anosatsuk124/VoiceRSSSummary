@@ -28,7 +28,7 @@ export async function updatePodcastRSS() {
     const fileUrl = `${baseUrl}/podcast_audio/${path.basename(ep.audioPath)}`;
     const pubDate = new Date(ep.pubDate).toUTCString();
     const fileSize = fsSync.statSync(
-      path.join(import.meta.dir, "public/podcast_audio", ep.audioPath),
+      path.join(import.meta.dir, "..", "public/podcast_audio", ep.audioPath),
     ).size;
     itemsXml += `
       <item>
