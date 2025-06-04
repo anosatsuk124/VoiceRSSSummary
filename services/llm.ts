@@ -1,9 +1,9 @@
-import { Configuration, OpenAIApi } from "openai";
+import { OpenAI, ClientOptions } from "openai";
 
-const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-const openai = new OpenAIApi(configuration);
+const clientOptions: ClientOptions = {
+  apiKey: import.meta.env["OPENAI_API_KEY"] ?? "",
+};
+const openai = new OpenAI(clientOptions);
 
 export async function openAI_GenerateScript(item: {
   title: string;
