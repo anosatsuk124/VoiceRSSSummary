@@ -68,8 +68,12 @@ async function main() {
         }
 
         const already = await markAsProcessed(url, finalItemId);
-        if (already) continue;
+        if (already) {
+          console.log(`既に処理済み: ${finalItemId}`);
+          continue;
+        }
 
+        console.log(`スクリプト生成開始: ${finalItemId}`);
         const scriptText = await openAI_GenerateScript({
           title: item.title ?? "",
           link: item.link ?? "",
@@ -83,6 +87,8 @@ async function main() {
         
         const audioFilePath = await generateTTS(uniqueFilename, scriptText);
 
+        console.log(`音声ファイル生成完了: ${audioFilePath}`);
+        
         await saveEpisode({
           id: finalItemId,
           title: item.title ?? "",
@@ -90,6 +96,8 @@ async function main() {
           audioPath: audioFilePath,
           sourceLink: item.link ?? "",
         });
+        
+        console.log(`エピソード保存完了: ${finalItemId}`);
       }
     }
   }

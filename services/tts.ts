@@ -18,6 +18,7 @@ export async function generateTTS(
   itemId: string,
   scriptText: string,
 ): Promise<string> {
+  console.log(`TTS生成開始: ${itemId}`);
   const encodedText = encodeURIComponent(scriptText);
 
   const queryUrl = `${VOICEVOX_HOST}/audio_query?text=${encodedText}&speaker=${defaultVoiceStyle.styleId}`;
@@ -37,6 +38,7 @@ export async function generateTTS(
 
   const audioQuery = await queryResponse.json();
 
+  console.log(`音声合成開始: ${itemId}`);
   const audioResponse = await fetch(synthesisUrl, {
     method: "POST",
     headers: {
@@ -46,6 +48,7 @@ export async function generateTTS(
   });
 
   if (!audioResponse.ok) {
+    console.error(`音声合成失敗: ${itemId}`);
     throw new Error("VOICEVOX 音声合成に失敗しました");
   }
 
@@ -59,7 +62,9 @@ export async function generateTTS(
   }
 
   const filePath = path.resolve(outputDir, itemId); // Use the provided filename directly
+  console.log(`音声ファイル保存開始: ${filePath}`);
   fs.writeFileSync(filePath, audioBuffer);
+  console.log(`音声ファイル保存完了: ${filePath}`);
 
   return filePath;
 }
