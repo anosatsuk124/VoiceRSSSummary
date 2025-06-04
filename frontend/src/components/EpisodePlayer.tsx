@@ -36,7 +36,7 @@ export default function EpisodePlayer() {
 
   const handlePlay = (episode: Episode) => {
     setSelectedEpisode(episode);
-    setAudioUrl(`/podcast_audio/${episode.id}.mp3`);
+    setAudioUrl(`/podcast_audio/${episode.audioPath}`);
   };
 
   if (loading) return <div>読み込み中...</div>;
@@ -68,11 +68,7 @@ export default function EpisodePlayer() {
             再生中: {selectedEpisode.title}
           </h4>
           {audioUrl ? (
-            <audio
-              src={audioUrl}
-              controls
-              className="w-full"
-            />
+            <audio src={audioUrl} controls className="w-full" />
           ) : (
             <div>音声ファイルを読み込み中...</div>
           )}

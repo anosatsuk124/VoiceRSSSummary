@@ -66,5 +66,5 @@ export async function generateTTS(
   fs.writeFileSync(filePath, audioBuffer);
   console.log(`音声ファイル保存完了: ${filePath}`);
 
-  return filePath;
+  return path.basename(filePath);
 }

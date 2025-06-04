@@ -44,7 +44,7 @@ export async function updatePodcastRSS() {
   }
 
   const outputPath = join(__dirname, "../public/podcast.xml");
-  
+
   // 既存のRSSファイルの読み込み
   let existingXml = "";
   try {
@@ -56,26 +56,28 @@ export async function updatePodcastRSS() {
 
   if (existingXml) {
     // 既存のitem部分を抽出
-    const existingItemsMatch = existingXml.match(/<channel>([\s\S]*?)<\/channel>/);
+    const existingItemsMatch = existingXml.match(
+      /<channel>([\s\S]*?)<\/channel>/,
+    );
     if (existingItemsMatch) {
       const existingItems = existingItemsMatch[1];
-      const newItemStartIndex = existingItems.lastIndexOf("<item>");
-      
+      const newItemStartIndex = existingItems!.lastIndexOf("<item>");
+
       // 新しいitemを追加
       const updatedItems = existingItems + itemsXml;
-      
+
       // lastBuildDateを更新
       const updatedXml = existingXml.replace(
         /<lastBuildDate>.*?<\/lastBuildDate>/,
-        `<lastBuildDate>${lastBuildDate}</lastBuildDate>`
+        `<lastBuildDate>${lastBuildDate}</lastBuildDate>`,
       );
-      
+
       // items部分を置き換え
       const finalXml = updatedXml.replace(
         /<channel>[\s\S]*?<\/channel>/,
-        `<channel>${updatedItems}</channel>`
+        `<channel>${updatedItems}</channel>`,
       );
-      
+
       // ファイルに書き込み
       await fs.writeFile(outputPath, finalXml.trim());
     } else {
@@ -106,7 +108,7 @@ export async function updatePodcastRSS() {
       </channel>
     </rss>
     `;
-    
+
     // Ensure directory exists
     await fs.mkdir(dirname(outputPath), { recursive: true });
     await fs.writeFile(outputPath, rssXml.trim());
