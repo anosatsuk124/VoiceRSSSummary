@@ -22,7 +22,11 @@ export async function updatePodcastRSS() {
     itemsXml += `
       <item>
         <title><![CDATA[${ep.title}]]></title>
-        <description><![CDATA[この記事を元に自動生成したポッドキャストです]]></description>
+        <description><![CDATA[${ep.title}]]></description>
+        <author>${channelAuthor}</author>
+        <category>${channelCategories}</category>
+        <language>${channelLanguage}</language>
+        <ttl>${channelTTL}</ttl>
         <enclosure url="${fileUrl}" length="${fs.statSync(ep.audioPath).size}" type="audio/mpeg" />
         <guid>${fileUrl}</guid>
         <pubDate>${pubDate}</pubDate>
