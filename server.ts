@@ -3,6 +3,7 @@ import { serve } from "@hono/node-server";
 import fs from "fs";
 import path from "path";
 import { Database } from "bun:sqlite";
+import { batchProcess } from "./scripts/fetch_and_generate";
 
 const projectRoot = import.meta.dirname;
 
