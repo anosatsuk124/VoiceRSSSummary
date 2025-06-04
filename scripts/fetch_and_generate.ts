@@ -82,9 +82,9 @@ async function main() {
       .createHash("md5")
       .update(category)
       .digest("hex");
-    const uniqueFilename = `${feedUrlHash}-${categoryHash}.wav`;
+    const uniqueId = `${feedUrlHash}-${categoryHash}.wav`;
 
-    const audioFilePath = await generateTTS(uniqueFilename, podcastContent);
+    const audioFilePath = await generateTTS(uniqueId, podcastContent);
     console.log(`音声ファイル生成完了: ${audioFilePath}`);
 
     // エピソードとして保存（各フィードにつき1つの統合エピソード）
@@ -96,7 +96,7 @@ async function main() {
     const pub = new Date(firstItem.pubDate || "");
 
     await saveEpisode({
-      id: `topic-${categoryHash}`,
+      id: uniqueId,
       title: `${category}: ${feedTitle}`,
       pubDate: pub.toISOString(),
       audioPath: audioFilePath,

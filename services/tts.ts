@@ -63,7 +63,7 @@ export async function generateTTS(
 
   const filePath = path.resolve(outputDir, itemId); // Use the provided filename directly
   console.log(`音声ファイル保存開始: ${filePath}`);
-  fs.writeFileSync(filePath, audioBuffer);
+  fs.writeFileSync(`${filePath}.wav`, audioBuffer);
   console.log(`音声ファイル保存完了: ${filePath}`);
 
   return path.basename(filePath);
