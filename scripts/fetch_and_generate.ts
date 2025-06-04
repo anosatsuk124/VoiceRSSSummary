@@ -65,7 +65,7 @@ async function main() {
           continue;
         }
 
-        const already = await markAsProcessed(url, itemId);
+        const already = await markAsProcessed(url, finalItemId);
         if (already) continue;
 
         const scriptText = await openAI_GenerateScript({
