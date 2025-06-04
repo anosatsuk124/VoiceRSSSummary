@@ -10,10 +10,6 @@ VOLUME /app
 # Copy project files
 COPY . .
 
-RUN apt update && apt install -y \
-    ffmpeg \
-    --no-install-recommends
-
 # Install dependencies
 RUN bun install
 
