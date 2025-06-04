@@ -43,10 +43,10 @@ export async function batchProcess() {
     try {
       await processFeedUrl(url);
     } finally {
-      await updatePodcastRSS();
     }
   }
 
+  await updatePodcastRSS();
   console.log("処理完了:", new Date().toISOString());
 }
 
