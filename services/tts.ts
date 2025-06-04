@@ -2,17 +2,19 @@ import fs from "fs";
 import path from "path";
 
 // VOICEVOX APIの設定
-const VOICEVOX_HOST = "http://localhost:50021";
+const VOICEVOX_HOST = process.env.VOICEVOX_HOST ?? "http://localhost:50021";
+const VOICEVOX_SPEAKER_ID = parseInt(process.env.VOICEVOX_SPEAKER_ID ?? "3");
+const VOICEVOX_STYLE_ID = parseInt(process.env.VOICEVOX_STYLE_ID ?? "2");
 
 interface VoiceStyle {
   speakerId: number;
   styleId: number;
 }
 
-// 仮の声設定（例: サイドM = 3）
+// 環境変数からデフォルトの声設定を取得
 const defaultVoiceStyle: VoiceStyle = {
-  speakerId: 3,
-  styleId: 2,
+  speakerId: VOICEVOX_SPEAKER_ID,
+  styleId: VOICEVOX_STYLE_ID,
 };
 
 export async function generateTTS(
