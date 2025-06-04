@@ -4,7 +4,7 @@
     "lib": ["ESNext", "DOM"],
     "target": "ESNext",
     "module": "ESNext",
-    "moduleDetection": "auto",
+    "moduleDetection": "force",
     "jsx": "preserve",
     "jsxImportSource": "react",
     "allowJs": true,
@@ -12,7 +12,6 @@
     // Bundler mode
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
     "noEmit": true,
 
     // Best practices
@@ -28,19 +27,8 @@
     "noPropertyAccessFromIndexSignature": true,
 
     // Next.js specific settings
-    "types": ["next", "react", "node"]
+    "types": ["react", "bun"]
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    "**/*.js",
-    "**/*.jsx"
-  ],
-  "exclude": [
-    "node_modules",
-    ".next",
-    "out",
-    "public",
-    "styles"
-  ]
+  "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
+  "exclude": ["node_modules", ".next", "out", "public", "styles"]
 }

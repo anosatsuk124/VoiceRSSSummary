@@ -2,9 +2,12 @@ import fs from "fs";
 import path from "path";
 
 // VOICEVOX APIの設定
-const VOICEVOX_HOST = process.env.VOICEVOX_HOST ?? "http://localhost:50021";
-const VOICEVOX_SPEAKER_ID = parseInt(process.env.VOICEVOX_SPEAKER_ID ?? "3");
-const VOICEVOX_STYLE_ID = parseInt(process.env.VOICEVOX_STYLE_ID ?? "2");
+const VOICEVOX_HOST =
+  import.meta.env["VOICEVOX_HOST"] ?? "http://localhost:50021";
+const VOICEVOX_SPEAKER_ID = parseInt(
+  import.meta.env["VOICEVOX_SPEAKER_ID"] ?? "3",
+);
+const VOICEVOX_STYLE_ID = parseInt(import.meta.env["VOICEVOX_STYLE_ID"] ?? "2");
 
 interface VoiceStyle {
   speakerId: number;

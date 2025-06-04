@@ -21,7 +21,7 @@ const __dirname = path.dirname(__filename);
 
 async function main() {
   const parser = new Parser<FeedItem>();
-  const feedUrlsFile = process.env.FEED_URLS_FILE ?? "feed_urls.txt";
+  const feedUrlsFile = import.meta.env["FEED_URLS_FILE"] ?? "feed_urls.txt";
   const feedUrlsPath = path.resolve(__dirname, "..", feedUrlsFile);
   let feedUrls: string[];
   try {
