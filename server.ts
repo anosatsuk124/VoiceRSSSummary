@@ -166,18 +166,13 @@ app.get("*", async (c) => {
  * 初回実行後に1日ごとのバッチ処理をスケジュールする関数
  */
 function scheduleFirstBatchProcess() {
-  console.log("Initial batch process will run in 1 minute...");
-  setTimeout(async () => {
-    try {
-      console.log("Running initial batch process...");
-      runBatchProcess();
-      console.log("Initial batch process completed");
-    } catch (error) {
-      console.error("Error during initial batch process:", error);
-    }
-    // 初回実行後、次回以降の定期実行を設定
-    scheduleDailyBatchProcess();
-  }, 60 * 1000); // 1 minute
+  try {
+    console.log("Running initial batch process...");
+    runBatchProcess();
+    console.log("Initial batch process completed");
+  } catch (error) {
+    console.error("Error during initial batch process:", error);
+  }
 }
 
 function scheduleDailyBatchProcess() {
@@ -229,5 +224,6 @@ serve(
     console.log(`Server is running on http://localhost:${info.port}`);
     // 初回実行
     scheduleFirstBatchProcess();
+    scheduleDailyBatchProcess();
   },
 );
