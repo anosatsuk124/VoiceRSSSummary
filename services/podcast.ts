@@ -38,7 +38,7 @@ export async function updatePodcastRSS() {
         <category>${channelCategories}</category>
         <language>${channelLanguage}</language>
         <ttl>${channelTTL}</ttl>
-        <enclosure url="${fileUrl}" length="${fileSize}" type="audio/wav" />
+        <enclosure url="${fileUrl}" length="${fileSize}" type="audio/mpeg" />
         <guid>${fileUrl}</guid>
         <pubDate>${pubDate}</pubDate>
       </item>

@@ -86,5 +86,9 @@ export async function generateTTS(
       .save(mp3FilePath);
   });
 
+  // Wavファイルを削除
+  fs.unlinkSync(wavFilePath);
+  console.log(`TTS生成完了: ${itemId}`);
+
   return path.basename(mp3FilePath);
 }
