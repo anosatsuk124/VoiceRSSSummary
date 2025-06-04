@@ -1,166 +1,136 @@
-import { serve } from "bun";
+import { Hono } from "hono";
+import { serve } from "@hono/node-server";
 import fs from "fs";
 import path from "path";
-import { Database } from "bun:sqlite"; // bun:sqlite は非同期が基本
+import { Database } from "bun:sqlite";
 
-const projectRoot = import.meta.dirname; // server.ts がプロジェクトルートにあると仮定
+const projectRoot = import.meta.dirname;
 
+// データベースパスの設定
 const dbPath = path.join(projectRoot, "data/podcast.db");
-
-// data ディレクトリが存在しない場合は作成
 const dataDir = path.dirname(dbPath);
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
-
-// データベースファイルが存在しない場合、空のファイルを作成し、スキーマを適用
 const db = new Database(dbPath);
 if (!fs.existsSync(dbPath)) {
-  fs.closeSync(fs.openSync(dbPath, "w")); // 空のDBファイルを作成
+  fs.closeSync(fs.openSync(dbPath, "w"));
 }
-await db.exec(fs.readFileSync(path.join(projectRoot, "schema.sql"), "utf-8"));
+db.exec(fs.readFileSync(path.join(projectRoot, "schema.sql"), "utf-8"));
 
-// 静的ファイルを提供するディレクトリのパス設定
-// services/tts.ts の出力先は ../static/podcast_audio であり、
-// services/podcast.ts の出力先は ../public/podcast.xml であることを考慮
+// 静的ファイルパスの設定
 const frontendPublicDir = path.join(projectRoot, "frontend", "public");
-const frontendBuildDir = path.join(projectRoot, "frontend", ".next"); // Next.jsアプリのビルド出力先
-const podcastAudioDir = path.join(projectRoot, "static", "podcast_audio"); // TTSが音声ファイルを保存する場所
-const generalPublicDir = path.join(projectRoot, "public"); // podcast.xml などが置かれる場所
+const frontendBuildDir = path.join(projectRoot, "frontend", ".next");
+const podcastAudioDir = path.join(projectRoot, "static", "podcast_audio");
+const generalPublicDir = path.join(projectRoot, "public");
 
-console.log(`Serving frontend static files from: ${frontendPublicDir}`);
-console.log(`Serving frontend build artifacts from: ${frontendBuildDir}`);
-console.log(`Serving podcast audio from: ${podcastAudioDir}`);
-console.log(`Serving general public files (e.g., podcast.xml) from: ${generalPublicDir}`);
+const app = new Hono();
 
-serve({
-  port: 3000,
-  async fetch(req: Request): Promise<Response> {
-    const url = new URL(req.url);
-    const pathname = url.pathname;
-
-    // API Routes
-    if (pathname === "/api/feeds") {
-      if (req.method === "GET") {
-        const rows = await db
-          .query("SELECT feed_url FROM processed_feed_items GROUP BY feed_url")
-          .all() as { feed_url: string }[];
-        return new Response(JSON.stringify(rows.map((r) => r.feed_url)), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      if (req.method === "POST") {
-        try {
-          const { feedUrl }: { feedUrl: string } = await req.json();
-          console.log("Received feedUrl to add:", feedUrl);
-          // TODO: feedUrl をデータベースに保存する処理
-          return new Response(JSON.stringify({ result: "OK" }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-        } catch (e) {
-          return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-      }
-    }
-
-    if (pathname === "/api/episodes") {
-      if (req.method === "GET") {
-        const episodes = await db
-          .query("SELECT * FROM episodes ORDER BY pubDate DESC")
-          .all();
-        return new Response(JSON.stringify(episodes), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-    }
-
-    if (pathname.startsWith("/api/episodes/") && pathname.endsWith("/regenerate")) {
-      if (req.method === "POST") {
-        const parts = pathname.split('/');
-        const id = parts[3];
-        console.log("Regeneration requested for episode ID:", id);
-        // TODO: 再生成ロジックを実装
-        return new Response(
-          JSON.stringify({ result: `Regeneration requested for ${id}` }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-    }
-    
-    // Next.jsの静的ファイルを提供
-    if (pathname.startsWith("/_next/")) {
-        const assetPath = pathname.substring("/_next/".length);
-        const filePath = path.join(frontendBuildDir, "_next", assetPath);
-        try {
-            const file = Bun.file(filePath);
-            if (await file.exists()) {
-                let contentType = "application/octet-stream";
-                if (filePath.endsWith(".js")) contentType = "application/javascript; charset=utf-8";
-                else if (filePath.endsWith(".css")) contentType = "text/css; charset=utf-8";
-                else if (filePath.endsWith(".png")) contentType = "image/png";
-                else if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) contentType = "image/jpeg";
-                // 必要に応じて他のMIMEタイプを追加
-                return new Response(file, { headers: { "Content-Type": contentType } });
-            }
-        } catch (e) {
-            console.error(`Error serving Next.js static file ${filePath}:`, e);
-        }
-    }
-
-    // Serve /podcast_audio/* from static/podcast_audio
-    if (pathname.startsWith("/podcast_audio/")) {
-        const audioFileName = pathname.substring("/podcast_audio/".length);
-        const audioFilePath = path.join(podcastAudioDir, audioFileName);
-        try {
-            const file = Bun.file(audioFilePath);
-            if (await file.exists()) {
-                return new Response(file, { headers: { "Content-Type": "audio/mpeg" } });
-            }
-        } catch (e) {
-            console.error(`Error serving audio file ${audioFilePath}:`, e);
-        }
-    }
-
-    // Serve /podcast.xml from generalPublicDir (project_root/public/podcast.xml)
-    if (pathname === "/podcast.xml") {
-        const filePath = path.join(generalPublicDir, "podcast.xml");
-        try {
-            const file = Bun.file(filePath);
-            if (await file.exists()) {
-                return new Response(file, { headers: { "Content-Type": "application/xml; charset=utf-8" } });
-            }
-        } catch (e) {
-            console.error(`Error serving podcast.xml ${filePath}:`, e);
-        }
-    }
-
-    // Next.jsの静的ファイルを提供するディレクトリのパスを指定
-    const indexPath = path.join(frontendBuildDir, "server", "pages", "index.html");
-
-    // 通常のリクエストは静的ファイルで処理
-    try {
-        const file = Bun.file(indexPath);
-        if (await file.exists()) {
-            return new Response(file, {
-                headers: { "Content-Type": "text/html; charset=utf-8" }
-            });
-        }
-    } catch (e) {
-        console.error("Error serving index.html:", e);
-    }
-
-    return new Response("Not Found", { status: 404 });
-  },
-  error(error: Error): Response {
-    console.error("Server error:", error);
-    return new Response("Internal Server Error", { status: 500 });
-  },
+// APIルート
+app.get("/api/feeds", async (c) => {
+  const rows = db
+    .query("SELECT feed_url FROM processed_feed_items GROUP BY feed_url")
+    .all() as { feed_url: string }[];
+  return c.json(rows.map((r) => r.feed_url));
 });
 
-console.log("Server is running on http://localhost:3000");
+app.post("/api/feeds", async (c) => {
+  try {
+    const { feedUrl } = await c.req.json<{ feedUrl: string }>();
+    console.log("Received feedUrl to add:", feedUrl);
+    // TODO: feedUrl をデータベースに保存する処理
+    return c.json({ result: "OK" });
+  } catch (e) {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+});
+
+app.get("/api/episodes", (c) => {
+  const episodes = db
+    .query("SELECT * FROM episodes ORDER BY pubDate DESC")
+    .all();
+  return c.json(episodes);
+});
+
+app.post("/api/episodes/:id/regenerate", (c) => {
+  const id = c.req.param("id");
+  console.log("Regeneration requested for episode ID:", id);
+  // TODO: 再生成ロジックを実装
+  return c.json({ result: `Regeneration requested for ${id}` });
+});
+
+// 静的ファイルの処理
+
+// Next.jsのビルドファイル
+app.get("/_next/*", async (c) => {
+  const assetPath = c.req.path.substring("/_next/".length);
+  const filePath = path.join(frontendBuildDir, "_next", assetPath);
+  try {
+    const file = Bun.file(filePath);
+    if (await file.exists()) {
+      let contentType = "application/octet-stream";
+      if (filePath.endsWith(".js")) contentType = "application/javascript; charset=utf-8";
+      else if (filePath.endsWith(".css")) contentType = "text/css; charset=utf-8";
+      else if (filePath.endsWith(".png")) contentType = "image/png";
+      else if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) contentType = "image/jpeg";
+      return c.body(file, 200, { "Content-Type": contentType });
+    }
+  } catch (e) {
+    console.error(`Error serving Next.js static file ${filePath}:`, e);
+  }
+  return c.notFound();
+});
+
+// podcast_audio
+app.get("/podcast_audio/*", async (c) => {
+  const audioFileName = c.req.path.substring("/podcast_audio/".length);
+  const audioFilePath = path.join(podcastAudioDir, audioFileName);
+  try {
+    const file = Bun.file(audioFilePath);
+    if (await file.exists()) {
+      return c.body(file, 200, { "Content-Type": "audio/mpeg" });
+    }
+  } catch (e) {
+    console.error(`Error serving audio file ${audioFilePath}:`, e);
+  }
+  return c.notFound();
+});
+
+// podcast.xml
+app.get("/podcast.xml", async (c) => {
+  const filePath = path.join(generalPublicDir, "podcast.xml");
+  try {
+    const file = Bun.file(filePath);
+    if (await file.exists()) {
+      return c.body(file, 200, { "Content-Type": "application/xml; charset=utf-8" });
+    }
+  } catch (e) {
+    console.error(`Error serving podcast.xml ${filePath}:`, e);
+  }
+  return c.notFound();
+});
+
+// フォールバックとして index.html
+app.get("*", async (c) => {
+  const indexPath = path.join(frontendBuildDir, "server", "pages", "index.html");
+  try {
+    const file = Bun.file(indexPath);
+    if (await file.exists()) {
+      return c.body(file, 200, { "Content-Type": "text/html; charset=utf-8" });
+    }
+  } catch (e) {
+    console.error("Error serving index.html:", e);
+  }
+  return c.notFound();
+});
+
+// サーバー起動
+serve(
+  {
+    fetch: app.fetch,
+    port: 3000,
+  },
+  (info) => {
+    console.log(`Server is running on http://localhost:${info.port}`);
+  }
+);
