@@ -62,11 +62,16 @@ app.post("/api/episodes/:id/regenerate", (c) => {
 // 静的ファイルの処理
 
 // Vite ビルドの静的ファイル（main.js, assets/ など）
-app.get("/main.js", async (c) => {
-  const filePath = path.join(frontendBuildDir, "main.js");
+app.get("/assets/*", async (c) => {
+  const filePath = path.join(frontendBuildDir, c.req.path);
   const file = Bun.file(filePath);
   if (await file.exists()) {
-    return c.body(file, 200, { "Content-Type": "application/javascript; charset=utf-8" });
+    const contentType = filePath.endsWith(".js")
+      ? "application/javascript"
+      : filePath.endsWith(".css")
+      ? "text/css"
+      : "application/octet-stream";
+    return c.body(file, 200, { "Content-Type": contentType });
   }
   return c.notFound();
 });
