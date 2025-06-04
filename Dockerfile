@@ -13,6 +13,8 @@ COPY . .
 # Install dependencies
 RUN bun install
 
+RUN bun run build:frontend
+
 # Expose the port your app runs on
 EXPOSE 3000
 
