@@ -82,7 +82,7 @@ async function main() {
       .createHash("md5")
       .update(category)
       .digest("hex");
-    const uniqueId = `${feedUrlHash}-${categoryHash}.wav`;
+    const uniqueId = `${feedUrlHash}-${categoryHash}`;
 
     const audioFilePath = await generateTTS(uniqueId, podcastContent);
     console.log(`音声ファイル生成完了: ${audioFilePath}`);
