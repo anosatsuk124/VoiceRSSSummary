@@ -74,7 +74,7 @@ const processFeedUrl = async (url: string) => {
 
   if (yesterdayItems.length === 0) {
     console.log(`昨日の記事が見つかりません: ${feedTitle}`);
-    continue;
+    return;
   }
 
   // ポッドキャスト原稿生成
@@ -99,7 +99,7 @@ const processFeedUrl = async (url: string) => {
   const firstItem = yesterdayItems[0];
   if (!firstItem) {
     console.warn("アイテムが空です");
-    continue;
+    return;
   }
   const pub = new Date(firstItem.pubDate || "");
 
