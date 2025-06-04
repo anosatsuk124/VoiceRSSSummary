@@ -1,6 +1,5 @@
 import fs from "fs";
 import path from "path";
-import fetch from "node-fetch";
 
 // VOICEVOX APIの設定
 const VOICEVOX_HOST = "http://localhost:50021";
@@ -54,7 +53,8 @@ export async function generateTTS(
     throw new Error("VOICEVOX 音声合成に失敗しました");
   }
 
-  const audioBuffer = await audioResponse.buffer();
+  const audioArrayBuffer = await audioResponse.arrayBuffer();
+  const audioBuffer = Buffer.from(audioArrayBuffer);
 
   // 出力ディレクトリの準備
   const outputDir = path.join(__dirname, "../public/podcast_audio");

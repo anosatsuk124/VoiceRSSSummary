@@ -70,7 +70,7 @@ app.get("/assets/*", async (c) => {
       : filePath.endsWith(".css")
       ? "text/css"
       : "application/octet-stream";
-    const blob = await file.blob();
+    const blob = await file.arrayBuffer();
     return c.body(blob, 200, { "Content-Type": contentType });
   }
   return c.notFound();

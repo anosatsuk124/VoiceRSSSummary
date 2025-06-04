@@ -13,6 +13,7 @@ export default function EpisodePlayer() {
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
