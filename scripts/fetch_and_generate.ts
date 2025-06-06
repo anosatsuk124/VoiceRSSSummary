@@ -2,143 +2,407 @@ import Parser from "rss-parser";
 import {
   openAI_ClassifyFeed,
   openAI_GeneratePodcastContent,
-} from "../services/llm";
-import { generateTTS } from "../services/tts";
-import { saveEpisode, markAsProcessed } from "../services/database";
-import { updatePodcastRSS } from "../services/podcast";
+} from "../services/llm.js";
+import { generateTTS } from "../services/tts.js";
+import { 
+  saveFeed, 
+  getFeedByUrl, 
+  saveArticle, 
+  getUnprocessedArticles, 
+  markArticleAsProcessed,
+  saveEpisode
+} from "../services/database.js";
+import { updatePodcastRSS } from "../services/podcast.js";
+import { config } from "../services/config.js";
 import crypto from "crypto";
+import fs from "fs/promises";
 
 interface FeedItem {
-  id: string;
-  title: string;
-  link: string;
-  pubDate: string;
+  id?: string;
+  title?: string;
+  link?: string;
+  pubDate?: string;
   contentSnippet?: string;
+  content?: string;
+  description?: string;
 }
 
-import fs from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-export async function batchProcess() {
-  const feedUrlsFile = import.meta.env["FEED_URLS_FILE"] ?? "feed_urls.txt";
-  const feedUrlsPath = path.resolve(__dirname, "..", feedUrlsFile);
-  let feedUrls: string[];
+/**
+ * Main batch processing function
+ * Processes all feeds and generates podcasts for new articles
+ */
+export async function batchProcess(): Promise<void> {
   try {
-    const data = await fs.readFile(feedUrlsPath, "utf-8");
-    feedUrls = data
+    console.log("🚀 Starting enhanced batch process...");
+    
+    // Load feed URLs from file
+    const feedUrls = await loadFeedUrls();
+    if (feedUrls.length === 0) {
+      console.log("ℹ️  No feed URLs found.");
+      return;
+    }
+    
+    console.log(`📡 Processing ${feedUrls.length} feeds...`);
+
+    // Process each feed URL
+    for (const url of feedUrls) {
+      try {
+        await processFeedUrl(url);
+      } catch (error) {
+        console.error(`❌ Failed to process feed ${url}:`, error);
+        // Continue with other feeds
+      }
+    }
+
+    // Process unprocessed articles and generate podcasts
+    await processUnprocessedArticles();
+
+    // Update RSS feed
+    await updatePodcastRSS();
+    
+    console.log("✅ Enhanced batch process completed:", new Date().toISOString());
+  } catch (error) {
+    console.error("💥 Batch process failed:", error);
+    throw error;
+  }
+}
+
+/**
+ * Load feed URLs from configuration file
+ */
+async function loadFeedUrls(): Promise<string[]> {
+  try {
+    const data = await fs.readFile(config.paths.feedUrlsFile, "utf-8");
+    return data
       .split("\n")
       .map((url) => url.trim())
-      .filter((url) => url.length > 0);
+      .filter((url) => url.length > 0 && !url.startsWith("#"));
   } catch (err) {
-    console.warn(`フィードURLファイルの読み込みに失敗: ${feedUrlsFile}`);
-    feedUrls = [];
+    console.warn(`⚠️  Failed to read feed URLs file: ${config.paths.feedUrlsFile}`);
+    console.warn("📝 Please create the file with one RSS URL per line.");
+    return [];
   }
-
-  // フィードごとに処理
-  for (const url of feedUrls) {
-    try {
-      await processFeedUrl(url);
-    } finally {
-    }
-  }
-
-  await updatePodcastRSS();
-  console.log("処理完了:", new Date().toISOString());
 }
 
-const processFeedUrl = async (url: string) => {
+/**
+ * Process a single feed URL and discover new articles
+ */
+async function processFeedUrl(url: string): Promise<void> {
+  if (!url || !url.startsWith('http')) {
+    throw new Error(`Invalid feed URL: ${url}`);
+  }
+  
+  console.log(`🔍 Processing feed: ${url}`);
+  
+  try {
+    // Parse RSS feed
+    const parser = new Parser<FeedItem>();
+    const feed = await parser.parseURL(url);
+
+    // Get or create feed record
+    let feedRecord = await getFeedByUrl(url);
+    if (!feedRecord) {
+      console.log(`➕ Adding new feed: ${feed.title || url}`);
+      await saveFeed({
+        url,
+        title: feed.title,
+        description: feed.description,
+        lastUpdated: new Date().toISOString(),
+        active: true
+      });
+      feedRecord = await getFeedByUrl(url);
+    }
+
+    if (!feedRecord) {
+      throw new Error("Failed to create or retrieve feed record");
+    }
+
+    // Process feed items and save new articles
+    const newArticlesCount = await discoverNewArticles(feedRecord, feed.items || []);
+    
+    // Update feed last updated timestamp
+    if (newArticlesCount > 0) {
+      await saveFeed({
+        url: feedRecord.url,
+        title: feedRecord.title,
+        description: feedRecord.description,
+        lastUpdated: new Date().toISOString(),
+        active: feedRecord.active
+      });
+    }
+
+    console.log(`📊 Feed processed: ${feed.title || url} (${newArticlesCount} new articles)`);
+    
+  } catch (error) {
+    console.error(`💥 Error processing feed ${url}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Discover and save new articles from feed items
+ */
+async function discoverNewArticles(feed: any, items: FeedItem[]): Promise<number> {
+  let newArticlesCount = 0;
+  
+  for (const item of items) {
+    if (!item.title || !item.link) {
+      console.warn("⚠️  Skipping item without title or link");
+      continue;
+    }
+
+    try {
+      // Generate article ID based on link
+      const articleId = await saveArticle({
+        feedId: feed.id,
+        title: item.title,
+        link: item.link,
+        description: item.description || item.contentSnippet,
+        content: item.content,
+        pubDate: item.pubDate || new Date().toISOString(),
+        processed: false
+      });
+
+      // Check if this is truly a new article
+      if (articleId) {
+        newArticlesCount++;
+        console.log(`📄 New article discovered: ${item.title}`);
+      }
+      
+    } catch (error) {
+      console.error(`❌ Error saving article: ${item.title}`, error);
+    }
+  }
+  
+  return newArticlesCount;
+}
+
+/**
+ * Process unprocessed articles and generate podcasts
+ */
+async function processUnprocessedArticles(): Promise<void> {
+  console.log("🎧 Processing unprocessed articles...");
+  
+  try {
+    // Get unprocessed articles (limit to prevent overwhelming)
+    const unprocessedArticles = await getUnprocessedArticles(20);
+    
+    if (unprocessedArticles.length === 0) {
+      console.log("ℹ️  No unprocessed articles found.");
+      return;
+    }
+
+    console.log(`🎯 Found ${unprocessedArticles.length} unprocessed articles`);
+
+    for (const article of unprocessedArticles) {
+      try {
+        await generatePodcastForArticle(article);
+        await markArticleAsProcessed(article.id);
+        console.log(`✅ Podcast generated for: ${article.title}`);
+      } catch (error) {
+        console.error(`❌ Failed to generate podcast for article: ${article.title}`, error);
+        // Don't mark as processed if generation failed
+      }
+    }
+    
+  } catch (error) {
+    console.error("💥 Error processing unprocessed articles:", error);
+    throw error;
+  }
+}
+
+/**
+ * Generate podcast for a single article
+ */
+async function generatePodcastForArticle(article: any): Promise<void> {
+  console.log(`🎤 Generating podcast for: ${article.title}`);
+  
+  try {
+    // Get feed information for context
+    const feed = await getFeedByUrl(article.feedId);
+    const feedTitle = feed?.title || "Unknown Feed";
+    
+    // Classify the article/feed
+    const category = await openAI_ClassifyFeed(`${feedTitle}: ${article.title}`);
+    console.log(`🏷️  Article classified as: ${category}`);
+
+    // Generate podcast content for this single article
+    const podcastContent = await openAI_GeneratePodcastContent(
+      article.title,
+      [{
+        title: article.title,
+        link: article.link
+      }]
+    );
+
+    // Generate unique ID for the episode
+    const episodeId = crypto.randomUUID();
+    
+    // Generate TTS audio
+    const audioFilePath = await generateTTS(episodeId, podcastContent);
+    console.log(`🔊 Audio generated: ${audioFilePath}`);
+
+    // Get audio file stats
+    const audioStats = await getAudioFileStats(audioFilePath);
+
+    // Save episode
+    await saveEpisode({
+      articleId: article.id,
+      title: `${category}: ${article.title}`,
+      description: article.description || `Podcast episode for: ${article.title}`,
+      audioPath: audioFilePath,
+      duration: audioStats.duration,
+      fileSize: audioStats.size
+    });
+
+    console.log(`💾 Episode saved for article: ${article.title}`);
+    
+  } catch (error) {
+    console.error(`💥 Error generating podcast for article: ${article.title}`, error);
+    throw error;
+  }
+}
+
+/**
+ * Get audio file statistics
+ */
+async function getAudioFileStats(audioFileName: string): Promise<{ duration?: number, size: number }> {
+  try {
+    const audioPath = `${config.paths.podcastAudioDir}/${audioFileName}`;
+    const stats = await fs.stat(audioPath);
+    
+    return {
+      size: stats.size,
+      // TODO: Add duration calculation using ffprobe if needed
+      duration: undefined
+    };
+  } catch (error) {
+    console.warn(`⚠️  Could not get audio file stats for ${audioFileName}:`, error);
+    return { size: 0 };
+  }
+}
+
+/**
+ * Legacy function compatibility - process feed URL the old way
+ * This is kept for backward compatibility during migration
+ */
+// Commented out to fix TypeScript unused variable warnings
+/* async function legacyProcessFeedUrl(url: string): Promise<void> {
+  console.log(`🔄 Legacy processing for: ${url}`);
+  
   const parser = new Parser<FeedItem>();
   const feed = await parser.parseURL(url);
 
-  // フィードのカテゴリ分類
+  // Feed classification
   const feedTitle = feed.title || url;
   const category = await openAI_ClassifyFeed(feedTitle);
-  console.log(`フィード分類完了: ${feedTitle} - ${category}`);
+  console.log(`Feed classified: ${feedTitle} - ${category}`);
 
-  const latest5Items = feed.items.slice(0, 5);
+  const latest5Items = (feed.items || []).slice(0, 5);
+  
+  if (latest5Items.length === 0) {
+    console.log(`No items found in feed: ${feedTitle}`);
+    return;
+  }
 
-  // FIXME: 昨日の記事のみフィルタリング
-  // const yesterday = new Date();
-  // yesterday.setDate(yesterday.getDate() - 1);
-  // const yesterdayItems = feed.items.filter((item) => {
-  //   const pub = new Date(item.pubDate || "");
-  //   return (
-  //     pub.getFullYear() === yesterday.getFullYear() &&
-  //     pub.getMonth() === yesterday.getMonth() &&
-  //     pub.getDate() === yesterday.getDate()
-  //   );
-  // });
-  // if (yesterdayItems.length === 0) {
-  //   console.log(`昨日の記事が見つかりません: ${feedTitle}`);
-  //   return;
-  // }
-
-  // ポッドキャスト原稿生成
-  console.log(`ポッドキャスト原稿生成開始: ${feedTitle}`);
+  // Generate podcast content (old way - multiple articles in one podcast)
+  console.log(`Generating podcast content for: ${feedTitle}`);
   const validItems = latest5Items.filter((item): item is FeedItem => {
     return !!item.title && !!item.link;
   });
-  const podcastContent = await openAI_GeneratePodcastContent(
-    feedTitle,
-    validItems,
-  );
-
-  // トピックごとの統合音声生成
-  const feedUrlHash = crypto.createHash("md5").update(url).digest("hex");
-  const categoryHash = crypto.createHash("md5").update(category).digest("hex");
-  const uniqueId = `${feedUrlHash}-${categoryHash}`;
-
-  const audioFilePath = await generateTTS(uniqueId, podcastContent);
-  console.log(`音声ファイル生成完了: ${audioFilePath}`);
-
-  // エピソードとして保存（各フィードにつき1つの統合エピソード）
-  const firstItem = latest5Items[0];
-  if (!firstItem) {
-    console.warn("アイテムが空です");
+  
+  if (validItems.length === 0) {
+    console.log(`No valid items found in feed: ${feedTitle}`);
     return;
   }
-  const pub = new Date(firstItem.pubDate || "");
+  
+  const podcastContent = await openAI_GeneratePodcastContent(
+    feedTitle,
+    validItems as any
+  );
 
+  // Generate unique ID for this feed and category combination
+  const feedUrlHash = crypto.createHash("md5").update(url).digest("hex");
+  const categoryHash = crypto.createHash("md5").update(category).digest("hex");
+  const timestamp = new Date().getTime();
+  const uniqueId = `${feedUrlHash}-${categoryHash}-${timestamp}`;
+
+  const audioFilePath = await generateTTS(uniqueId, podcastContent);
+  console.log(`Audio file generated: ${audioFilePath}`);
+
+  // Save as legacy episode
+  const firstItem = latest5Items[0];
+  if (!firstItem) {
+    console.warn("No items found");
+    return;
+  }
+  
+  const pubDate = new Date(firstItem.pubDate || new Date());
+
+  // For now, save using the new episode structure
+  // TODO: Remove this once migration is complete
+  const tempArticleId = crypto.randomUUID();
   await saveEpisode({
-    id: uniqueId,
+    articleId: tempArticleId,
     title: `${category}: ${feedTitle}`,
-    pubDate: pub.toISOString(),
-    audioPath: audioFilePath,
-    sourceLink: url,
+    description: `Legacy podcast for feed: ${feedTitle}`,
+    audioPath: audioFilePath
   });
 
-  console.log(`エピソード保存完了: ${category} - ${feedTitle}`);
+  console.log(`Legacy episode saved: ${category} - ${feedTitle}`);
 
-  // 個別記事の処理記録
+  // Mark individual articles as processed (legacy)
   for (const item of latest5Items) {
-    const itemId = item["id"] as string | undefined;
-    const fallbackId = item.link || item.title || JSON.stringify(item);
-    const finalItemId =
-      itemId && typeof itemId === "string" && itemId.trim() !== ""
+    try {
+      const itemId = (item as any)["id"] as string | undefined;
+      const fallbackId = item.link || item.title || JSON.stringify(item);
+      const finalItemId = itemId && typeof itemId === "string" && itemId.trim() !== ""
         ? itemId
         : `fallback-${Buffer.from(fallbackId).toString("base64")}`;
 
-    if (!finalItemId || finalItemId.trim() === "") {
-      console.warn(`フィードアイテムのIDを生成できませんでした`, {
-        feedUrl: url,
-        itemTitle: item.title,
-        itemLink: item.link,
-      });
-      continue;
-    }
+      if (!finalItemId || finalItemId.trim() === "") {
+        console.warn(`Could not generate ID for feed item`, {
+          feedUrl: url,
+          itemTitle: item.title,
+          itemLink: item.link,
+        });
+        continue;
+      }
 
-    const already = await markAsProcessed(url, finalItemId);
-    if (already) {
-      console.log(`既に処理済み: ${finalItemId}`);
-      continue;
+      const alreadyProcessed = await markAsProcessed(url, finalItemId);
+      if (alreadyProcessed) {
+        console.log(`Already processed: ${finalItemId}`);
+      }
+    } catch (error) {
+      console.error(`Error marking item as processed:`, error);
     }
   }
-};
+} */
 
-batchProcess().catch((err) => {
-  console.error("バッチ処理中にエラーが発生しました:", err);
-});
+// Export function for use in server
+export async function addNewFeedUrl(feedUrl: string): Promise<void> {
+  if (!feedUrl || !feedUrl.startsWith('http')) {
+    throw new Error('Invalid feed URL');
+  }
+  
+  try {
+    // Add to feeds table
+    await saveFeed({
+      url: feedUrl,
+      active: true
+    });
+    
+    console.log(`✅ Feed URL added: ${feedUrl}`);
+  } catch (error) {
+    console.error(`❌ Failed to add feed URL: ${feedUrl}`, error);
+    throw error;
+  }
+}
+
+// Run if this script is executed directly
+if (import.meta.main) {
+  batchProcess().catch((err) => {
+    console.error("💥 Batch process failed:", err);
+    process.exit(1);
+  });
+}

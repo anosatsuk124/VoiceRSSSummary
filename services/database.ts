@@ -1,35 +1,78 @@
 import { Database } from "bun:sqlite";
-import path from "path";
 import fs from "fs";
+import crypto from "crypto";
+import { config } from "./config.js";
 
-// データベースディレクトリのパスを取得
-const dbDir = path.join(__dirname, "../data");
-
-// ディレクトリが存在しない場合は作成
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+// Initialize database with proper error handling
+function initializeDatabase(): Database {
+  // Ensure data directory exists
+  if (!fs.existsSync(config.paths.dataDir)) {
+    fs.mkdirSync(config.paths.dataDir, { recursive: true });
+  }
+  
+  // Create database file if it doesn't exist
+  if (!fs.existsSync(config.paths.dbPath)) {
+    fs.closeSync(fs.openSync(config.paths.dbPath, "w"));
+  }
+  
+  const db = new Database(config.paths.dbPath);
+  
+  // Ensure schema is set up
+  db.exec(`CREATE TABLE IF NOT EXISTS processed_feed_items (
+    feed_url TEXT NOT NULL,
+    item_id   TEXT NOT NULL,
+    processed_at TEXT NOT NULL,
+    PRIMARY KEY(feed_url, item_id)
+  );
+  
+  CREATE TABLE IF NOT EXISTS episodes (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    pubDate TEXT NOT NULL,
+    audioPath TEXT NOT NULL,
+    sourceLink TEXT NOT NULL
+  );`);
+  
+  return db;
 }
 
-const dbPath = path.join(dbDir, "podcast.db");
-const db = new Database(dbPath);
+const db = initializeDatabase();
 
-// Ensure schema is set up
-db.exec(`CREATE TABLE IF NOT EXISTS processed_feed_items (
-  feed_url TEXT NOT NULL,
-  item_id   TEXT NOT NULL,
-  processed_at TEXT NOT NULL,
-  PRIMARY KEY(feed_url, item_id)
-);
+export interface Feed {
+  id: string;
+  url: string;
+  title?: string;
+  description?: string;
+  lastUpdated?: string;
+  createdAt: string;
+  active: boolean;
+}
 
-CREATE TABLE IF NOT EXISTS episodes (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  pubDate TEXT NOT NULL,
-  audioPath TEXT NOT NULL,
-  sourceLink TEXT NOT NULL
-);`);
+export interface Article {
+  id: string;
+  feedId: string;
+  title: string;
+  link: string;
+  description?: string;
+  content?: string;
+  pubDate: string;
+  discoveredAt: string;
+  processed: boolean;
+}
 
 export interface Episode {
+  id: string;
+  articleId: string;
+  title: string;
+  description?: string;
+  audioPath: string;
+  duration?: number;
+  fileSize?: number;
+  createdAt: string;
+}
+
+// Legacy interface for backward compatibility
+export interface LegacyEpisode {
   id: string;
   title: string;
   pubDate: string;
@@ -37,30 +80,286 @@ export interface Episode {
   sourceLink: string;
 }
 
+// Feed management functions
+export async function saveFeed(feed: Omit<Feed, 'id' | 'createdAt'>): Promise<string> {
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  
+  try {
+    const stmt = db.prepare(
+      "INSERT OR REPLACE INTO feeds (id, url, title, description, last_updated, created_at, active) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    );
+    stmt.run(id, feed.url, feed.title || null, feed.description || null, feed.lastUpdated || null, createdAt, feed.active ? 1 : 0);
+    return id;
+  } catch (error) {
+    console.error("Error saving feed:", error);
+    throw error;
+  }
+}
+
+export async function getFeedByUrl(url: string): Promise<Feed | null> {
+  try {
+    const stmt = db.prepare("SELECT * FROM feeds WHERE url = ?");
+    const row = stmt.get(url) as any;
+    if (!row) return null;
+    
+    return {
+      id: row.id,
+      url: row.url,
+      title: row.title,
+      description: row.description,
+      lastUpdated: row.last_updated,
+      createdAt: row.created_at,
+      active: Boolean(row.active)
+    };
+  } catch (error) {
+    console.error("Error getting feed by URL:", error);
+    throw error;
+  }
+}
+
+export async function getAllFeeds(): Promise<Feed[]> {
+  try {
+    const stmt = db.prepare("SELECT * FROM feeds WHERE active = 1 ORDER BY created_at DESC");
+    const rows = stmt.all() as any[];
+    
+    return rows.map(row => ({
+      id: row.id,
+      url: row.url,
+      title: row.title,
+      description: row.description,
+      lastUpdated: row.last_updated,
+      createdAt: row.created_at,
+      active: Boolean(row.active)
+    }));
+  } catch (error) {
+    console.error("Error getting all feeds:", error);
+    throw error;
+  }
+}
+
+// Article management functions
+export async function saveArticle(article: Omit<Article, 'id' | 'discoveredAt'>): Promise<string> {
+  const id = crypto.randomUUID();
+  const discoveredAt = new Date().toISOString();
+  
+  try {
+    const stmt = db.prepare(
+      "INSERT OR IGNORE INTO articles (id, feed_id, title, link, description, content, pub_date, discovered_at, processed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    );
+    const result = stmt.run(id, article.feedId, article.title, article.link, article.description || null, article.content || null, article.pubDate, discoveredAt, article.processed ? 1 : 0);
+    
+    // Return existing ID if article already exists
+    if (result.changes === 0) {
+      const existing = db.prepare("SELECT id FROM articles WHERE link = ?").get(article.link) as any;
+      return existing?.id || id;
+    }
+    
+    return id;
+  } catch (error) {
+    console.error("Error saving article:", error);
+    throw error;
+  }
+}
+
+export async function getUnprocessedArticles(limit?: number): Promise<Article[]> {
+  try {
+    const sql = `SELECT * FROM articles WHERE processed = 0 ORDER BY pub_date DESC ${limit ? `LIMIT ${limit}` : ''}`;
+    const stmt = db.prepare(sql);
+    const rows = stmt.all() as any[];
+    
+    return rows.map(row => ({
+      id: row.id,
+      feedId: row.feed_id,
+      title: row.title,
+      link: row.link,
+      description: row.description,
+      content: row.content,
+      pubDate: row.pub_date,
+      discoveredAt: row.discovered_at,
+      processed: Boolean(row.processed)
+    }));
+  } catch (error) {
+    console.error("Error getting unprocessed articles:", error);
+    throw error;
+  }
+}
+
+export async function markArticleAsProcessed(articleId: string): Promise<void> {
+  try {
+    const stmt = db.prepare("UPDATE articles SET processed = 1 WHERE id = ?");
+    stmt.run(articleId);
+  } catch (error) {
+    console.error("Error marking article as processed:", error);
+    throw error;
+  }
+}
+
+// Legacy function for backward compatibility
 export async function markAsProcessed(
   feedUrl: string,
   itemId: string,
 ): Promise<boolean> {
-  const stmt = db.prepare(
-    "SELECT 1 FROM processed_feed_items WHERE feed_url = ? AND item_id = ?",
-  );
-  const row = stmt.get(feedUrl, itemId);
-  if (row) return true;
-  const insert = db.prepare(
-    "INSERT INTO processed_feed_items (feed_url, item_id, processed_at) VALUES (?, ?, ?)",
-  );
-  insert.run(feedUrl, itemId, new Date().toISOString());
-  return false;
+  if (!feedUrl || !itemId) {
+    throw new Error("feedUrl and itemId are required");
+  }
+  
+  try {
+    const stmt = db.prepare(
+      "SELECT 1 FROM processed_feed_items WHERE feed_url = ? AND item_id = ?",
+    );
+    const row = stmt.get(feedUrl, itemId);
+    if (row) return true;
+    
+    const insert = db.prepare(
+      "INSERT INTO processed_feed_items (feed_url, item_id, processed_at) VALUES (?, ?, ?)",
+    );
+    insert.run(feedUrl, itemId, new Date().toISOString());
+    return false;
+  } catch (error) {
+    console.error("Error marking item as processed:", error);
+    throw error;
+  }
 }
 
-export async function saveEpisode(ep: Episode): Promise<void> {
-  const stmt = db.prepare(
-    "INSERT OR IGNORE INTO episodes (id, title, pubDate, audioPath, sourceLink) VALUES (?, ?, ?, ?, ?)",
-  );
-  stmt.run(ep.id, ep.title, ep.pubDate, ep.audioPath, ep.sourceLink);
+// Episode management functions
+export async function saveEpisode(episode: Omit<Episode, 'id' | 'createdAt'>): Promise<string> {
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  
+  if (!episode.articleId || !episode.title || !episode.audioPath) {
+    throw new Error("articleId, title, and audioPath are required");
+  }
+  
+  try {
+    const stmt = db.prepare(
+      "INSERT INTO episodes (id, article_id, title, description, audio_path, duration, file_size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    );
+    stmt.run(id, episode.articleId, episode.title, episode.description || null, episode.audioPath, episode.duration || null, episode.fileSize || null, createdAt);
+    return id;
+  } catch (error) {
+    console.error("Error saving episode:", error);
+    throw error;
+  }
+}
+
+// Legacy function for backward compatibility
+export async function saveLegacyEpisode(ep: LegacyEpisode): Promise<void> {
+  if (!ep.id || !ep.title || !ep.pubDate || !ep.audioPath || !ep.sourceLink) {
+    throw new Error("All episode fields are required");
+  }
+  
+  try {
+    // For now, save to a temporary table for migration
+    const stmt = db.prepare(
+      "CREATE TABLE IF NOT EXISTS legacy_episodes (id TEXT PRIMARY KEY, title TEXT, pubDate TEXT, audioPath TEXT, sourceLink TEXT)"
+    );
+    stmt.run();
+    
+    const insert = db.prepare(
+      "INSERT OR IGNORE INTO legacy_episodes (id, title, pubDate, audioPath, sourceLink) VALUES (?, ?, ?, ?, ?)",
+    );
+    insert.run(ep.id, ep.title, ep.pubDate, ep.audioPath, ep.sourceLink);
+  } catch (error) {
+    console.error("Error saving legacy episode:", error);
+    throw error;
+  }
 }
 
 export async function fetchAllEpisodes(): Promise<Episode[]> {
-  const stmt = db.prepare("SELECT * FROM episodes ORDER BY pubDate DESC");
-  return stmt.all() as Episode[];
+  try {
+    const stmt = db.prepare(`
+      SELECT 
+        e.id,
+        e.article_id as articleId,
+        e.title,
+        e.description,
+        e.audio_path as audioPath,
+        e.duration,
+        e.file_size as fileSize,
+        e.created_at as createdAt
+      FROM episodes e
+      ORDER BY e.created_at DESC
+    `);
+    return stmt.all() as Episode[];
+  } catch (error) {
+    console.error("Error fetching episodes:", error);
+    throw error;
+  }
+}
+
+export async function fetchEpisodesWithArticles(): Promise<(Episode & { article: Article, feed: Feed })[]> {
+  try {
+    const stmt = db.prepare(`
+      SELECT 
+        e.id,
+        e.article_id as articleId,
+        e.title,
+        e.description,
+        e.audio_path as audioPath,
+        e.duration,
+        e.file_size as fileSize,
+        e.created_at as createdAt,
+        a.id as article_id,
+        a.feed_id as article_feedId,
+        a.title as article_title,
+        a.link as article_link,
+        a.description as article_description,
+        a.content as article_content,
+        a.pub_date as article_pubDate,
+        a.discovered_at as article_discoveredAt,
+        a.processed as article_processed,
+        f.id as feed_id,
+        f.url as feed_url,
+        f.title as feed_title,
+        f.description as feed_description,
+        f.last_updated as feed_lastUpdated,
+        f.created_at as feed_createdAt,
+        f.active as feed_active
+      FROM episodes e
+      JOIN articles a ON e.article_id = a.id
+      JOIN feeds f ON a.feed_id = f.id
+      ORDER BY e.created_at DESC
+    `);
+    
+    const rows = stmt.all() as any[];
+    
+    return rows.map(row => ({
+      id: row.id,
+      articleId: row.articleId,
+      title: row.title,
+      description: row.description,
+      audioPath: row.audioPath,
+      duration: row.duration,
+      fileSize: row.fileSize,
+      createdAt: row.createdAt,
+      article: {
+        id: row.article_id,
+        feedId: row.article_feedId,
+        title: row.article_title,
+        link: row.article_link,
+        description: row.article_description,
+        content: row.article_content,
+        pubDate: row.article_pubDate,
+        discoveredAt: row.article_discoveredAt,
+        processed: Boolean(row.article_processed)
+      },
+      feed: {
+        id: row.feed_id,
+        url: row.feed_url,
+        title: row.feed_title,
+        description: row.feed_description,
+        lastUpdated: row.feed_lastUpdated,
+        createdAt: row.feed_createdAt,
+        active: Boolean(row.feed_active)
+      }
+    }));
+  } catch (error) {
+    console.error("Error fetching episodes with articles:", error);
+    throw error;
+  }
+}
+
+export function closeDatabase(): void {
+  db.close();
 }

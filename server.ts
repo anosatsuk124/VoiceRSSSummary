@@ -1,218 +1,296 @@
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
-import fs from "fs";
 import path from "path";
-import { Database } from "bun:sqlite";
+import { config, validateConfig } from "./services/config.js";
+import { 
+  fetchAllEpisodes, 
+  fetchEpisodesWithArticles,
+  getAllFeeds,
+  getFeedByUrl
+} from "./services/database.js";
+import { batchProcess, addNewFeedUrl } from "./scripts/fetch_and_generate.js";
 
-const projectRoot = import.meta.dirname;
-
-// データベースパスの設定
-const dbPath = path.join(projectRoot, "data/podcast.db");
-const dataDir = path.dirname(dbPath);
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+// Validate configuration on startup
+try {
+  validateConfig();
+  console.log("Configuration validated successfully");
+} catch (error) {
+  console.error("Configuration validation failed:", error);
+  process.exit(1);
 }
-const db = new Database(dbPath);
-if (!fs.existsSync(dbPath)) {
-  fs.closeSync(fs.openSync(dbPath, "w"));
-}
-db.exec(fs.readFileSync(path.join(projectRoot, "schema.sql"), "utf-8"));
-
-// 静的ファイルパスの設定
-const frontendBuildDir = path.join(projectRoot, "frontend", "dist");
-const podcastAudioDir = path.join(projectRoot, "public", "podcast_audio");
-const generalPublicDir = path.join(projectRoot, "public");
 
 const app = new Hono();
 
-// APIルート（順序を最適化）
+// API routes
 app.get("/api/feeds", async (c) => {
-  const rows = db
-    .query("SELECT feed_url FROM processed_feed_items GROUP BY feed_url")
-    .all() as { feed_url: string }[];
-  return c.json(rows.map((r) => r.feed_url));
+  try {
+    const feeds = await getAllFeeds();
+    return c.json(feeds);
+  } catch (error) {
+    console.error("Error fetching feeds:", error);
+    return c.json({ error: "Failed to fetch feeds" }, 500);
+  }
 });
 
 app.post("/api/feeds", async (c) => {
   try {
     const { feedUrl } = await c.req.json<{ feedUrl: string }>();
-    console.log("Received feedUrl to add:", feedUrl);
-    // TODO: feedUrl をデータベースに保存する処理
-    return c.json({ result: "OK" });
-  } catch (e) {
-    return c.json({ error: "Invalid JSON body" }, 400);
+    
+    if (!feedUrl || typeof feedUrl !== "string" || !feedUrl.startsWith('http')) {
+      return c.json({ error: "Valid feed URL is required" }, 400);
+    }
+    
+    console.log("➕ Adding new feed URL:", feedUrl);
+    
+    // Check if feed already exists
+    const existingFeed = await getFeedByUrl(feedUrl);
+    if (existingFeed) {
+      return c.json({ 
+        result: "EXISTS", 
+        message: "Feed URL already exists",
+        feed: existingFeed 
+      });
+    }
+    
+    // Add new feed
+    await addNewFeedUrl(feedUrl);
+    
+    return c.json({ 
+      result: "CREATED", 
+      message: "Feed URL added successfully",
+      feedUrl 
+    });
+  } catch (error) {
+    console.error("Error adding feed:", error);
+    return c.json({ error: "Failed to add feed" }, 500);
   }
 });
 
-app.get("/api/episodes", (c) => {
-  const episodes = db
-    .query("SELECT * FROM episodes ORDER BY pubDate DESC")
-    .all();
-  return c.json(episodes);
+app.get("/api/episodes", async (c) => {
+  try {
+    const episodes = await fetchEpisodesWithArticles();
+    return c.json(episodes);
+  } catch (error) {
+    console.error("Error fetching episodes:", error);
+    return c.json({ error: "Failed to fetch episodes" }, 500);
+  }
 });
 
-app.post("/api/episodes/:id/regenerate", (c) => {
-  const id = c.req.param("id");
-  console.log("Regeneration requested for episode ID:", id);
-  // TODO: 再生成ロジックを実装
-  return c.json({ result: `Regeneration requested for ${id}` });
+app.get("/api/episodes/simple", async (c) => {
+  try {
+    const episodes = await fetchAllEpisodes();
+    return c.json(episodes);
+  } catch (error) {
+    console.error("Error fetching simple episodes:", error);
+    return c.json({ error: "Failed to fetch episodes" }, 500);
+  }
+});
+
+app.post("/api/episodes/:id/regenerate", async (c) => {
+  try {
+    const id = c.req.param("id");
+    
+    if (!id || id.trim() === "") {
+      return c.json({ error: "Episode ID is required" }, 400);
+    }
+    
+    console.log("🔄 Regeneration requested for episode ID:", id);
+    // TODO: Implement regeneration logic
+    return c.json({ 
+      result: "PENDING", 
+      episodeId: id,
+      status: "pending",
+      message: "Regeneration feature will be implemented in a future update"
+    });
+  } catch (error) {
+    console.error("Error requesting regeneration:", error);
+    return c.json({ error: "Failed to request regeneration" }, 500);
+  }
+});
+
+// New API endpoints for enhanced functionality
+app.get("/api/stats", async (c) => {
+  try {
+    const feeds = await getAllFeeds();
+    const episodes = await fetchAllEpisodes();
+    
+    const stats = {
+      totalFeeds: feeds.length,
+      activeFeeds: feeds.filter(f => f.active).length,
+      totalEpisodes: episodes.length,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    return c.json(stats);
+  } catch (error) {
+    console.error("Error fetching stats:", error);
+    return c.json({ error: "Failed to fetch statistics" }, 500);
+  }
+});
+
+app.post("/api/batch/trigger", async (c) => {
+  try {
+    console.log("🚀 Manual batch process triggered via API");
+    
+    // Run batch process in background
+    runBatchProcess().catch(error => {
+      console.error("❌ Manual batch process failed:", error);
+    });
+    
+    return c.json({ 
+      result: "TRIGGERED",
+      message: "Batch process started in background",
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Error triggering batch process:", error);
+    return c.json({ error: "Failed to trigger batch process" }, 500);
+  }
 });
 
 // 静的ファイルの処理
 
-// Vite ビルドの静的ファイル（main.js, assets/ など）
+// Static file handlers
 app.get("/assets/*", async (c) => {
-  const filePath = path.join(frontendBuildDir, c.req.path);
-  const file = Bun.file(filePath);
-  if (await file.exists()) {
-    const contentType = filePath.endsWith(".js")
-      ? "application/javascript"
-      : filePath.endsWith(".css")
-        ? "text/css"
-        : "application/octet-stream";
-    const blob = await file.arrayBuffer();
-    return c.body(blob, 200, { "Content-Type": contentType });
-  }
-  return c.notFound();
-});
-
-// podcast_audio
-app.get("/podcast_audio/*", async (c) => {
-  const audioFileName = c.req.path.substring("/podcast_audio/".length);
-  const audioFilePath = path.join(podcastAudioDir, audioFileName);
-  const file = Bun.file(audioFilePath);
-  if (await file.exists()) {
-    const blob = await file.arrayBuffer();
-    return c.body(blob, 200, { "Content-Type": "audio/mpeg" });
-  }
-  return c.notFound();
-});
-
-// podcast.xml
-app.get("/podcast.xml", async (c) => {
-  const filePath = path.join(generalPublicDir, "podcast.xml");
   try {
+    const filePath = path.join(config.paths.frontendBuildDir, c.req.path);
     const file = Bun.file(filePath);
+    
+    if (await file.exists()) {
+      const contentType = filePath.endsWith(".js")
+        ? "application/javascript"
+        : filePath.endsWith(".css")
+          ? "text/css"
+          : "application/octet-stream";
+      const blob = await file.arrayBuffer();
+      return c.body(blob, 200, { "Content-Type": contentType });
+    }
+    return c.notFound();
+  } catch (error) {
+    console.error("Error serving asset:", error);
+    return c.notFound();
+  }
+});
+
+app.get("/podcast_audio/*", async (c) => {
+  try {
+    const audioFileName = c.req.path.substring("/podcast_audio/".length);
+    
+    // Basic security check
+    if (audioFileName.includes("..") || audioFileName.includes("/")) {
+      return c.notFound();
+    }
+    
+    const audioFilePath = path.join(config.paths.podcastAudioDir, audioFileName);
+    const file = Bun.file(audioFilePath);
+    
+    if (await file.exists()) {
+      const blob = await file.arrayBuffer();
+      return c.body(blob, 200, { "Content-Type": "audio/mpeg" });
+    }
+    return c.notFound();
+  } catch (error) {
+    console.error("Error serving audio file:", error);
+    return c.notFound();
+  }
+});
+
+app.get("/podcast.xml", async (c) => {
+  try {
+    const filePath = path.join(config.paths.publicDir, "podcast.xml");
+    const file = Bun.file(filePath);
+    
     if (await file.exists()) {
       const blob = await file.arrayBuffer();
       return c.body(blob, 200, {
         "Content-Type": "application/xml; charset=utf-8",
+        "Cache-Control": "public, max-age=3600", // Cache for 1 hour
       });
     }
-  } catch (e) {
-    console.error(`Error serving podcast.xml ${filePath}:`, e);
-  }
-  return c.notFound();
-});
-
-// フィードURL追加API
-app.post("/api/add-feed", async (c) => {
-  const { feedUrl } = await c.req.json();
-  if (!feedUrl || typeof feedUrl !== "string") {
-    return c.json({ error: "フィードURLが無効です" }, 400);
-  }
-
-  try {
-    // フィードURLを追加するロジック（例: scripts/fetch_and_generate.ts で実装）
-    const { addNewFeedUrl } = require("./scripts/fetch_and_generate");
-    await addNewFeedUrl(feedUrl);
-    return c.json({ message: "フィードが追加されました" });
-  } catch (err) {
-    console.error("フィード追加エラー:", err);
-    return c.json({ error: "フィードの追加に失敗しました" }, 500);
-  }
-});
-
-// フォールバックとして index.html（ルートパス）
-app.get("/", async (c) => {
-  const indexPath = path.join(frontendBuildDir, "index.html");
-  const file = Bun.file(indexPath);
-  if (await file.exists()) {
-    console.log(`Serving index.html from ${indexPath}`);
-    const blob = await file.arrayBuffer();
-    return c.body(blob, 200, { "Content-Type": "text/html; charset=utf-8" });
-  }
-  console.error(`index.html not found at ${indexPath}`);
-  return c.notFound();
-});
-
-// フォールバックとして index.html（明示的なパス）
-app.get("/index.html", async (c) => {
-  const indexPath = path.join(frontendBuildDir, "index.html");
-  const file = Bun.file(indexPath);
-  if (await file.exists()) {
-    console.log(`Serving index.html from ${indexPath}`);
-    const blob = await file.arrayBuffer();
-    return c.body(blob, 200, { "Content-Type": "text/html; charset=utf-8" });
-  }
-  console.error(`index.html not found at ${indexPath}`);
-  return c.notFound();
-});
-
-// その他のパスも index.html へフォールバック
-app.get("*", async (c) => {
-  const indexPath = path.join(frontendBuildDir, "index.html");
-  const file = Bun.file(indexPath);
-  if (await file.exists()) {
-    console.log(`Serving index.html from ${indexPath}`);
-    const blob = await file.arrayBuffer();
-    return c.body(blob, 200, { "Content-Type": "text/html; charset=utf-8" });
-  }
-  console.error(`index.html not found at ${indexPath}`);
-  return c.notFound();
-});
-
-/**
- * 初回実行後に1日ごとのバッチ処理をスケジュールする関数
- */
-function scheduleFirstBatchProcess() {
-  try {
-    console.log("Running initial batch process...");
-    runBatchProcess();
-    console.log("Initial batch process completed");
+    
+    console.warn("podcast.xml not found");
+    return c.notFound();
   } catch (error) {
-    console.error("Error during initial batch process:", error);
+    console.error("Error serving podcast.xml:", error);
+    return c.notFound();
+  }
+});
+
+// Legacy endpoint - redirect to new one
+app.post("/api/add-feed", async (c) => {
+  return c.json({ 
+    error: "This endpoint is deprecated. Use POST /api/feeds instead.",
+    newEndpoint: "POST /api/feeds"
+  }, 410);
+});
+
+// Frontend fallback routes
+async function serveIndex(c: any) {
+  try {
+    const indexPath = path.join(config.paths.frontendBuildDir, "index.html");
+    const file = Bun.file(indexPath);
+    
+    if (await file.exists()) {
+      const blob = await file.arrayBuffer();
+      return c.body(blob, 200, { "Content-Type": "text/html; charset=utf-8" });
+    }
+    
+    console.error(`index.html not found at ${indexPath}`);
+    return c.text("Frontend not built. Run 'bun run build:frontend'", 404);
+  } catch (error) {
+    console.error("Error serving index.html:", error);
+    return c.text("Internal server error", 500);
   }
 }
 
-function scheduleDailyBatchProcess() {
-  const now = new Date();
-  const nextRun = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() + 1,
-    0,
-    0,
-    0,
-  );
+app.get("/", serveIndex);
 
-  const delay = nextRun.getTime() - now.getTime();
+app.get("/index.html", serveIndex);
+
+// Catch-all for SPA routing
+app.get("*", serveIndex);
+
+// Batch processing functions
+function scheduleFirstBatchProcess() {
+  setTimeout(async () => {
+    try {
+      console.log("🚀 Running initial batch process...");
+      await runBatchProcess();
+      console.log("✅ Initial batch process completed");
+    } catch (error) {
+      console.error("❌ Error during initial batch process:", error);
+    }
+  }, 10000); // Wait 10 seconds after startup
+}
+
+function scheduleSixHourlyBatchProcess() {
+  const SIX_HOURS_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+  
   console.log(
-    `Next daily batch process scheduled in ${delay / 1000 / 60} minutes`,
+    `🕕 Next batch process scheduled in 6 hours (${new Date(Date.now() + SIX_HOURS_MS).toLocaleString()})`
   );
 
   setTimeout(async () => {
     try {
-      console.log("Running daily batch process...");
-      runBatchProcess();
-      console.log("Daily batch process completed");
+      console.log("🔄 Running scheduled 6-hourly batch process...");
+      await runBatchProcess();
+      console.log("✅ Scheduled batch process completed");
     } catch (error) {
-      console.error("Error during daily batch process:", error);
+      console.error("❌ Error during scheduled batch process:", error);
     }
-    // 次回実行を再設定
-    scheduleDailyBatchProcess();
-  }, delay);
+    // Schedule next run
+    scheduleSixHourlyBatchProcess();
+  }, SIX_HOURS_MS);
 }
 
-const runBatchProcess = () => {
+async function runBatchProcess(): Promise<void> {
   try {
-    console.log("Running batch process...");
-    Bun.spawn(["bun", "run", "scripts/fetch_and_generate.ts"]);
-    console.log("Batch process completed");
+    await batchProcess();
   } catch (error) {
-    console.error("Error during batch process:", error);
+    console.error("Batch process failed:", error);
+    throw error;
   }
-};
+}
 
 // サーバー起動
 serve(
@@ -221,9 +299,12 @@ serve(
     port: 3000,
   },
   (info) => {
-    console.log(`Server is running on http://localhost:${info.port}`);
-    // 初回実行
+    console.log(`🌟 Server is running on http://localhost:${info.port}`);
+    console.log(`📡 Using configuration from: ${config.paths.projectRoot}`);
+    console.log(`🗄️  Database: ${config.paths.dbPath}`);
+    
+    // Schedule batch processes
     scheduleFirstBatchProcess();
-    scheduleDailyBatchProcess();
+    scheduleSixHourlyBatchProcess();
   },
 );

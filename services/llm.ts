@@ -1,12 +1,20 @@
 import { OpenAI, ClientOptions } from "openai";
+import { config, validateConfig } from "./config.js";
+
+// Validate config on module load
+validateConfig();
 
 const clientOptions: ClientOptions = {
-  apiKey: import.meta.env["OPENAI_API_KEY"],
-  baseURL: import.meta.env["OPENAI_API_ENDPOINT"],
+  apiKey: config.openai.apiKey,
+  baseURL: config.openai.endpoint,
 };
 const openai = new OpenAI(clientOptions);
 
 export async function openAI_ClassifyFeed(title: string): Promise<string> {
+  if (!title || title.trim() === "") {
+    throw new Error("Feed title is required for classification");
+  }
+  
   const prompt = `
 以下のRSSフィードのタイトルを見て、適切なトピックカテゴリに分類してください。
 
@@ -26,26 +34,52 @@ export async function openAI_ClassifyFeed(title: string): Promise<string> {
 
 分類結果を上記カテゴリのいずれか1つだけ返してください。
 `;
-  const response = await openai.chat.completions.create({
-    model: import.meta.env["OPENAI_MODEL_NAME"] ?? "gpt-4o-mini",
-    messages: [{ role: "user", content: prompt.trim() }],
-    temperature: 0.3,
-  });
-  const category = response.choices[0]!.message?.content?.trim() || "その他";
-  return category;
+  
+  try {
+    const response = await openai.chat.completions.create({
+      model: config.openai.modelName,
+      messages: [{ role: "user", content: prompt.trim() }],
+      temperature: 0.3,
+    });
+    
+    const category = response.choices[0]?.message?.content?.trim();
+    if (!category) {
+      console.warn("OpenAI returned empty category, using default");
+      return "その他";
+    }
+    
+    return category;
+  } catch (error) {
+    console.error("Error classifying feed:", error);
+    throw new Error(`Failed to classify feed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }
 
 export async function openAI_GeneratePodcastContent(
   title: string,
   items: Array<{ title: string; link: string }>,
 ): Promise<string> {
+  if (!title || title.trim() === "") {
+    throw new Error("Feed title is required for podcast content generation");
+  }
+  
+  if (!items || items.length === 0) {
+    throw new Error("At least one news item is required for podcast content generation");
+  }
+  
+  // Validate items
+  const validItems = items.filter(item => item.title && item.link);
+  if (validItems.length === 0) {
+    throw new Error("No valid news items found (title and link required)");
+  }
+  
   const prompt = `
 あなたはプロのポッドキャスタです。以下に示すフィードタイトルに基づき、そのトピックに関する詳細なポッドキャスト原稿を作成してください。
 
 フィードタイトル: ${title}
 
 関連するニュース記事:
-${items.map((item, i) => `${i + 1}. ${item.title} - ${item.link}`).join("\n")}
+${validItems.map((item, i) => `${i + 1}. ${item.title} - ${item.link}`).join("\n")}
 
 以下の要件を満たしてください:
 1. 各ニュース記事の内容を要約し、関連性を説明してください
@@ -56,11 +90,22 @@ ${items.map((item, i) => `${i + 1}. ${item.title} - ${item.link}`).join("\n")}
 
 この構成でポッドキャスト原稿を書いてください。
 `;
-  const response = await openai.chat.completions.create({
-    model: import.meta.env["OPENAI_MODEL_NAME"] ?? "gpt-4o-mini",
-    messages: [{ role: "user", content: prompt.trim() }],
-    temperature: 0.7,
-  });
-  const scriptText = response.choices[0]!.message?.content?.trim() || "";
-  return scriptText;
+  
+  try {
+    const response = await openai.chat.completions.create({
+      model: config.openai.modelName,
+      messages: [{ role: "user", content: prompt.trim() }],
+      temperature: 0.7,
+    });
+    
+    const scriptText = response.choices[0]?.message?.content?.trim();
+    if (!scriptText) {
+      throw new Error("OpenAI returned empty podcast content");
+    }
+    
+    return scriptText;
+  } catch (error) {
+    console.error("Error generating podcast content:", error);
+    throw new Error(`Failed to generate podcast content: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }

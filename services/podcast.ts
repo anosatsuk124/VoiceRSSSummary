@@ -1,118 +1,77 @@
 import { promises as fs } from "fs";
-import { join, dirname } from "path";
-import { Episode, fetchAllEpisodes } from "./database";
+import { dirname } from "path";
+import { Episode, fetchAllEpisodes } from "./database.js";
 import path from "node:path";
 import fsSync from "node:fs";
+import { config } from "./config.js";
 
-export async function updatePodcastRSS() {
-  const episodes: Episode[] = await fetchAllEpisodes();
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
-  const channelTitle =
-    import.meta.env["PODCAST_TITLE"] ?? "自動生成ポッドキャスト";
-  const channelLink =
-    import.meta.env["PODCAST_LINK"] ?? "https://your-domain.com/podcast";
-  const channelDescription =
-    import.meta.env["PODCAST_DESCRIPTION"] ??
-    "RSSフィードから自動生成された音声ポッドキャスト";
-  const channelLanguage = import.meta.env["PODCAST_LANGUAGE"] ?? "ja";
-  const channelAuthor = import.meta.env["PODCAST_AUTHOR"] ?? "管理者";
-  const channelCategories =
-    import.meta.env["PODCAST_CATEGORIES"] ?? "Technology";
-  const channelTTL = import.meta.env["PODCAST_TTL"] ?? "60";
-  const lastBuildDate = new Date().toUTCString();
-  const baseUrl =
-    import.meta.env["PODCAST_BASE_URL"] ?? "https://your-domain.com";
-
-  let itemsXml = "";
-  for (const ep of episodes) {
-    const fileUrl = `${baseUrl}/podcast_audio/${path.basename(ep.audioPath)}`;
-    const pubDate = new Date(ep.pubDate).toUTCString();
-    const fileSize = fsSync.statSync(
-      path.join(import.meta.dir, "..", "public/podcast_audio", ep.audioPath),
-    ).size;
-    itemsXml += `
-      <item>
-        <title><![CDATA[${ep.title}]]></title>
-        <description><![CDATA[${ep.title.replace(/\]\]>/g, "]]&gt;").replace(/&/g, "&amp;").replace(/\]\]>/g, "]]&gt;")}]]></description>
-        <author>${channelAuthor}</author>
-        <category>${channelCategories}</category>
-        <language>${channelLanguage}</language>
-        <ttl>${channelTTL}</ttl>
-        <enclosure url="${fileUrl}" length="${fileSize}" type="audio/mpeg" />
-        <guid>${fileUrl}</guid>
-        <pubDate>${pubDate}</pubDate>
-      </item>
-    `;
-  }
-
-  const outputPath = join(__dirname, "../public/podcast.xml");
-
-  // 既存のRSSファイルの読み込み
-  let existingXml = "";
+function createItemXml(episode: Episode): string {
+  const fileUrl = `${config.podcast.baseUrl}/podcast_audio/${path.basename(episode.audioPath)}`;
+  const pubDate = new Date(episode.createdAt).toUTCString();
+  
+  let fileSize = 0;
   try {
-    existingXml = await fs.readFile(outputPath, "utf-8");
-  } catch (err) {
-    // ファイルが存在しない場合は新規作成
-    console.log("既存のpodcast.xmlが見つかりません。新規作成します。");
-  }
-
-  if (existingXml) {
-    // 既存のitem部分を抽出
-    const existingItemsMatch = existingXml.match(
-      /<channel>([\s\S]*?)<\/channel>/,
-    );
-    if (existingItemsMatch) {
-      const existingItems = existingItemsMatch[1];
-      const newItemStartIndex = existingItems!.lastIndexOf("<item>");
-
-      // 新しいitemを追加
-      const updatedItems = existingItems + itemsXml;
-
-      // lastBuildDateを更新
-      const updatedXml = existingXml.replace(
-        /<lastBuildDate>.*?<\/lastBuildDate>/,
-        `<lastBuildDate>${lastBuildDate}</lastBuildDate>`,
-      );
-
-      // items部分を置き換え
-      const finalXml = updatedXml.replace(
-        /<channel>[\s\S]*?<\/channel>/,
-        `<channel>${updatedItems}</channel>`,
-      );
-
-      // ファイルに書き込み
-      await fs.writeFile(outputPath, finalXml.trim());
-    } else {
-      // 不正なフォーマットの場合は新規作成
-      const rssXml = `<?xml version="1.0" encoding="UTF-8"?>
-      <rss version="2.0">
-        <channel>
-          <title>${channelTitle}</title>
-          <link>${channelLink}</link>
-          <description><![CDATA[${channelDescription}]]></description>
-          <lastBuildDate>${lastBuildDate}</lastBuildDate>
-          ${itemsXml}
-        </channel>
-      </rss>
-      `;
-      await fs.writeFile(outputPath, rssXml.trim());
+    const audioPath = path.join(config.paths.podcastAudioDir, episode.audioPath);
+    if (fsSync.existsSync(audioPath)) {
+      fileSize = fsSync.statSync(audioPath).size;
     }
-  } else {
-    // 新規作成
+  } catch (error) {
+    console.warn(`Could not get file size for ${episode.audioPath}:`, error);
+  }
+  
+  return `
+    <item>
+      <title><![CDATA[${escapeXml(episode.title)}]]></title>
+      <description><![CDATA[${escapeXml(episode.title)}]]></description>
+      <author>${escapeXml(config.podcast.author)}</author>
+      <category>${escapeXml(config.podcast.categories)}</category>
+      <language>${config.podcast.language}</language>
+      <ttl>${config.podcast.ttl}</ttl>
+      <enclosure url="${escapeXml(fileUrl)}" length="${fileSize}" type="audio/mpeg" />
+      <guid>${escapeXml(fileUrl)}</guid>
+      <pubDate>${pubDate}</pubDate>
+    </item>`;
+}
+
+export async function updatePodcastRSS(): Promise<void> {
+  try {
+    const episodes: Episode[] = await fetchAllEpisodes();
+    const lastBuildDate = new Date().toUTCString();
+
+    const itemsXml = episodes.map(createItemXml).join("\n");
+    const outputPath = path.join(config.paths.publicDir, "podcast.xml");
+
+    // Create RSS XML content
     const rssXml = `<?xml version="1.0" encoding="UTF-8"?>
-    <rss version="2.0">
-      <channel>
-        <title>${channelTitle}</title>
-        <link>${channelLink}</link>
-        <description><![CDATA[${channelDescription}]]></description>
-        <lastBuildDate>${lastBuildDate}</lastBuildDate>
-        ${itemsXml}
-      </channel>
-    </rss>
-    `;
+<rss version="2.0">
+  <channel>
+    <title>${escapeXml(config.podcast.title)}</title>
+    <link>${escapeXml(config.podcast.link)}</link>
+    <description><![CDATA[${escapeXml(config.podcast.description)}]]></description>
+    <language>${config.podcast.language}</language>
+    <lastBuildDate>${lastBuildDate}</lastBuildDate>
+    <ttl>${config.podcast.ttl}</ttl>
+    <author>${escapeXml(config.podcast.author)}</author>
+    <category>${escapeXml(config.podcast.categories)}</category>${itemsXml}
+  </channel>
+</rss>`;
 
     // Ensure directory exists
     await fs.mkdir(dirname(outputPath), { recursive: true });
-    await fs.writeFile(outputPath, rssXml.trim());
+    await fs.writeFile(outputPath, rssXml);
+    
+    console.log(`RSS feed updated with ${episodes.length} episodes`);
+  } catch (error) {
+    console.error("Error updating podcast RSS:", error);
+    throw error;
   }
 }
