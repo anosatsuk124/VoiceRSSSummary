@@ -119,6 +119,106 @@ app.get("/api/episodes", async (c) => {
   }
 });
 
+app.get("/api/episodes-from-xml", async (c) => {
+  try {
+    const xml2js = await import("xml2js");
+    const fs = await import("fs");
+    const podcastXmlPath = path.join(config.paths.publicDir, "podcast.xml");
+    
+    // Check if podcast.xml exists
+    if (!fs.existsSync(podcastXmlPath)) {
+      return c.json({ episodes: [], message: "podcast.xml not found" });
+    }
+
+    // Read and parse XML
+    const xmlContent = fs.readFileSync(podcastXmlPath, 'utf-8');
+    const parser = new xml2js.Parser();
+    const result = await parser.parseStringPromise(xmlContent);
+    
+    const episodes = [];
+    const items = result?.rss?.channel?.[0]?.item || [];
+    
+    for (const item of items) {
+      const episode = {
+        id: generateEpisodeId(item),
+        title: item.title?.[0] || 'Untitled',
+        description: item.description?.[0] || '',
+        pubDate: item.pubDate?.[0] || '',
+        audioUrl: item.enclosure?.[0]?.$?.url || '',
+        audioLength: item.enclosure?.[0]?.$?.length || '0',
+        guid: item.guid?.[0] || '',
+        link: item.link?.[0] || ''
+      };
+      episodes.push(episode);
+    }
+    
+    return c.json({ episodes });
+  } catch (error) {
+    console.error("Error parsing podcast XML:", error);
+    return c.json({ error: "Failed to parse podcast XML" }, 500);
+  }
+});
+
+// Helper function to generate episode ID from XML item
+function generateEpisodeId(item: any): string {
+  // Use GUID if available, otherwise generate from title and audio URL
+  if (item.guid?.[0]) {
+    return encodeURIComponent(item.guid[0].replace(/[^a-zA-Z0-9-_]/g, '-'));
+  }
+  
+  const title = item.title?.[0] || '';
+  const audioUrl = item.enclosure?.[0]?.$?.url || '';
+  const titleSlug = title.toLowerCase()
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .replace(/\s+/g, '-')
+    .substring(0, 50);
+  
+  // Extract filename from audio URL as fallback
+  const audioFilename = audioUrl.split('/').pop()?.split('.')[0] || 'episode';
+  
+  return titleSlug || audioFilename;
+}
+
+app.get("/api/episode/:episodeId", async (c) => {
+  try {
+    const episodeId = c.req.param("episodeId");
+    const xml2js = await import("xml2js");
+    const fs = await import("fs");
+    const podcastXmlPath = path.join(config.paths.publicDir, "podcast.xml");
+    
+    if (!fs.existsSync(podcastXmlPath)) {
+      return c.json({ error: "podcast.xml not found" }, 404);
+    }
+
+    const xmlContent = fs.readFileSync(podcastXmlPath, 'utf-8');
+    const parser = new xml2js.Parser();
+    const result = await parser.parseStringPromise(xmlContent);
+    
+    const items = result?.rss?.channel?.[0]?.item || [];
+    const targetItem = items.find((item: any) => generateEpisodeId(item) === episodeId);
+    
+    if (!targetItem) {
+      return c.json({ error: "Episode not found" }, 404);
+    }
+    
+    const episode = {
+      id: episodeId,
+      title: targetItem.title?.[0] || 'Untitled',
+      description: targetItem.description?.[0] || '',
+      pubDate: targetItem.pubDate?.[0] || '',
+      audioUrl: targetItem.enclosure?.[0]?.$?.url || '',
+      audioLength: targetItem.enclosure?.[0]?.$?.length || '0',
+      guid: targetItem.guid?.[0] || '',
+      link: targetItem.link?.[0] || ''
+    };
+    
+    return c.json({ episode });
+  } catch (error) {
+    console.error("Error fetching episode:", error);
+    return c.json({ error: "Failed to fetch episode" }, 500);
+  }
+});
+
 app.post("/api/feed-requests", async (c) => {
   try {
     const body = await c.req.json();

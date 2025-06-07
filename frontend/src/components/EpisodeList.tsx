@@ -3,14 +3,12 @@ import { useState, useEffect } from 'react'
 interface Episode {
   id: string
   title: string
-  audioPath: string
-  createdAt: string
-  article?: {
-    link: string
-  }
-  feed?: {
-    title: string
-  }
+  description: string
+  pubDate: string
+  audioUrl: string
+  audioLength: string
+  guid: string
+  link: string
 }
 
 function EpisodeList() {
@@ -26,14 +24,14 @@ function EpisodeList() {
   const fetchEpisodes = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/episodes')
+      const response = await fetch('/api/episodes-from-xml')
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error || 'エピソードの取得に失敗しました')
       }
       const data = await response.json()
-      console.log('Fetched episodes:', data)
-      setEpisodes(data)
+      console.log('Fetched episodes from XML:', data)
+      setEpisodes(data.episodes || [])
     } catch (err) {
       console.error('Episode fetch error:', err)
       setError(err instanceof Error ? err.message : 'エラーが発生しました')
@@ -46,7 +44,7 @@ function EpisodeList() {
     return new Date(dateString).toLocaleString('ja-JP')
   }
 
-  const playAudio = (audioPath: string) => {
+  const playAudio = (audioUrl: string) => {
     if (currentAudio) {
       const currentPlayer = document.getElementById(currentAudio) as HTMLAudioElement
       if (currentPlayer) {
@@ -54,7 +52,23 @@ function EpisodeList() {
         currentPlayer.currentTime = 0
       }
     }
-    setCurrentAudio(audioPath)
+    setCurrentAudio(audioUrl)
+  }
+
+  const shareEpisode = (episode: Episode) => {
+    const shareUrl = `${window.location.origin}/episode/${episode.id}`
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      alert('エピソードリンクをクリップボードにコピーしました')
+    }).catch(() => {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea')
+      textArea.value = shareUrl
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
+      alert('エピソードリンクをクリップボードにコピーしました')
+    })
   }
 
   if (loading) {
@@ -93,10 +107,10 @@ function EpisodeList() {
       <table className="table">
         <thead>
           <tr>
-            <th style={{ width: '40%' }}>タイトル</th>
-            <th style={{ width: '20%' }}>フィード</th>
-            <th style={{ width: '20%' }}>作成日時</th>
-            <th style={{ width: '20%' }}>操作</th>
+            <th style={{ width: '35%' }}>タイトル</th>
+            <th style={{ width: '25%' }}>説明</th>
+            <th style={{ width: '15%' }}>公開日</th>
+            <th style={{ width: '25%' }}>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -106,9 +120,9 @@ function EpisodeList() {
                 <div style={{ marginBottom: '8px' }}>
                   <strong>{episode.title}</strong>
                 </div>
-                {episode.article?.link && (
+                {episode.link && (
                   <a 
-                    href={episode.article.link} 
+                    href={episode.link} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     style={{ fontSize: '12px', color: '#666' }}
@@ -117,27 +131,46 @@ function EpisodeList() {
                   </a>
                 )}
               </td>
-              <td>{episode.feed?.title || '不明'}</td>
-              <td>{formatDate(episode.createdAt)}</td>
               <td>
-                <button 
-                  className="btn btn-primary"
-                  onClick={() => playAudio(episode.audioPath)}
-                  style={{ marginBottom: '8px' }}
-                >
-                  再生
-                </button>
-                {currentAudio === episode.audioPath && (
-                  <div>
-                    <audio
-                      id={episode.audioPath}
-                      controls
-                      className="audio-player"
-                      src={`/podcast_audio/${episode.audioPath}`}
-                      onEnded={() => setCurrentAudio(null)}
-                    />
+                <div style={{ 
+                  fontSize: '14px', 
+                  maxWidth: '200px', 
+                  overflow: 'hidden', 
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {episode.description || 'No description'}
+                </div>
+              </td>
+              <td>{formatDate(episode.pubDate)}</td>
+              <td>
+                <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button 
+                      className="btn btn-primary"
+                      onClick={() => playAudio(episode.audioUrl)}
+                    >
+                      再生
+                    </button>
+                    <button 
+                      className="btn btn-secondary"
+                      onClick={() => shareEpisode(episode)}
+                    >
+                      共有
+                    </button>
                   </div>
-                )}
+                  {currentAudio === episode.audioUrl && (
+                    <div>
+                      <audio
+                        id={episode.audioUrl}
+                        controls
+                        className="audio-player"
+                        src={episode.audioUrl}
+                        onEnded={() => setCurrentAudio(null)}
+                      />
+                    </div>
+                  )}
+                </div>
               </td>
             </tr>
           ))}
