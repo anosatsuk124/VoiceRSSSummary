@@ -2,7 +2,7 @@
   "name": "podcast-generator",
   "version": "1.0.0",
   "scripts": {
-    "start": "bun run server.ts",
+    "start": "bun run build:frontend && bun run server.ts",
     "build:frontend": "cd frontend && bun vite build",
     "dev:frontend": "cd frontend && bun vite dev"
   },

@@ -31,7 +31,7 @@ export default function EpisodePlayer() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  
+
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
@@ -46,14 +46,14 @@ export default function EpisodePlayer() {
     const updateDuration = () => setDuration(audio.duration);
     const handleEnded = () => setIsPlaying(false);
 
-    audio.addEventListener('timeupdate', updateTime);
-    audio.addEventListener('loadedmetadata', updateDuration);
-    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener("timeupdate", updateTime);
+    audio.addEventListener("loadedmetadata", updateDuration);
+    audio.addEventListener("ended", handleEnded);
 
     return () => {
-      audio.removeEventListener('timeupdate', updateTime);
-      audio.removeEventListener('loadedmetadata', updateDuration);
-      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener("timeupdate", updateTime);
+      audio.removeEventListener("loadedmetadata", updateDuration);
+      audio.removeEventListener("ended", handleEnded);
     };
   }, [selectedEpisode]);
 
@@ -103,7 +103,7 @@ export default function EpisodePlayer() {
     if (isNaN(time)) return "0:00";
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
   const formatFileSize = (bytes?: number) => {
@@ -112,10 +112,11 @@ export default function EpisodePlayer() {
     return `${mb.toFixed(1)} MB`;
   };
 
-  const filteredEpisodes = episodes.filter(episode =>
-    episode.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    episode.article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    episode.feed.title?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredEpisodes = episodes.filter(
+    (episode) =>
+      episode.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      episode.article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      episode.feed.title?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   if (loading) {
@@ -133,11 +134,6 @@ export default function EpisodePlayer() {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <div className="flex items-center">
-          <div className="text-red-400">
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-            </svg>
-          </div>
           <div className="ml-3">
             <h3 className="text-sm font-medium text-red-800">エラー</h3>
             <p className="text-sm text-red-700">{error}</p>
@@ -151,11 +147,6 @@ export default function EpisodePlayer() {
     <div className="space-y-6">
       {/* Search */}
       <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-        </div>
         <input
           type="text"
           placeholder="エピソードを検索..."
@@ -170,29 +161,25 @@ export default function EpisodePlayer() {
         <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-6 border border-purple-100">
           <div className="flex items-center space-x-4 mb-4">
             <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-blue-600 rounded-full flex items-center justify-center text-white">
-              <span role="img" aria-hidden="true" className="text-xl">🎵</span>
+              <span role="img" aria-hidden="true" className="text-xl">
+                🎵
+              </span>
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-lg font-semibold text-gray-900 truncate">{selectedEpisode.title}</h3>
-              <p className="text-sm text-gray-600">{selectedEpisode.feed.title}</p>
+              <h3 className="text-lg font-semibold text-gray-900 truncate">
+                {selectedEpisode.title}
+              </h3>
+              <p className="text-sm text-gray-600">
+                {selectedEpisode.feed.title}
+              </p>
             </div>
             <button
               onClick={() => handlePlay(selectedEpisode)}
               className="w-12 h-12 bg-white rounded-full shadow-md flex items-center justify-center hover:shadow-lg transition-shadow duration-200"
               aria-label={isPlaying ? "一時停止" : "再生"}
-            >
-              {isPlaying ? (
-                <svg className="w-6 h-6 text-gray-700" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              ) : (
-                <svg className="w-6 h-6 text-gray-700 ml-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                </svg>
-              )}
-            </button>
+            ></button>
           </div>
-          
+
           {/* Progress Bar */}
           <div className="space-y-2">
             <input
@@ -216,7 +203,12 @@ export default function EpisodePlayer() {
               <p className="text-gray-700">{selectedEpisode.description}</p>
             )}
             <div className="flex items-center space-x-4 text-gray-500">
-              <span>🗓️ {new Date(selectedEpisode.createdAt).toLocaleDateString('ja-JP')}</span>
+              <span>
+                🗓️{" "}
+                {new Date(selectedEpisode.createdAt).toLocaleDateString(
+                  "ja-JP",
+                )}
+              </span>
               <span>💾 {formatFileSize(selectedEpisode.fileSize)}</span>
               {selectedEpisode.article.link && (
                 <a
@@ -244,20 +236,28 @@ export default function EpisodePlayer() {
       {/* Episodes List */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">エピソード一覧</h3>
-          <span className="text-sm text-gray-500">{filteredEpisodes.length} エピソード</span>
+          <h3 className="text-lg font-semibold text-gray-900">
+            エピソード一覧
+          </h3>
+          <span className="text-sm text-gray-500">
+            {filteredEpisodes.length} エピソード
+          </span>
         </div>
 
         {filteredEpisodes.length === 0 ? (
           <div className="text-center py-12 bg-gray-50 rounded-xl">
             <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span role="img" aria-hidden="true" className="text-2xl">🎧</span>
+              <span role="img" aria-hidden="true" className="text-2xl">
+                🎧
+              </span>
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               {searchTerm ? "検索結果がありません" : "エピソードがありません"}
             </h3>
             <p className="text-gray-500">
-              {searchTerm ? "別のキーワードで検索してみてください" : "フィードを追加してバッチ処理を実行してください"}
+              {searchTerm
+                ? "別のキーワードで検索してみてください"
+                : "フィードを追加してバッチ処理を実行してください"}
             </p>
           </div>
         ) : (
@@ -267,14 +267,14 @@ export default function EpisodePlayer() {
                 key={episode.id}
                 className={`border rounded-xl p-4 transition-all duration-200 cursor-pointer ${
                   selectedEpisode?.id === episode.id
-                    ? 'border-purple-300 bg-purple-50 shadow-md'
-                    : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+                    ? "border-purple-300 bg-purple-50 shadow-md"
+                    : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
                 }`}
                 onClick={() => handlePlay(episode)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
+                  if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     handlePlay(episode);
                   }
@@ -282,24 +282,6 @@ export default function EpisodePlayer() {
                 aria-label={`エピソード: ${episode.title}`}
               >
                 <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                      selectedEpisode?.id === episode.id
-                        ? 'bg-purple-500 text-white'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {selectedEpisode?.id === episode.id && isPlaying ? (
-                        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                        </svg>
-                      ) : (
-                        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                    </div>
-                  </div>
-                  
                   <div className="flex-1 min-w-0">
                     <h4 className="text-base font-medium text-gray-900 mb-1 line-clamp-2">
                       {episode.title}
@@ -313,7 +295,12 @@ export default function EpisodePlayer() {
                       </p>
                     )}
                     <div className="flex items-center space-x-4 text-xs text-gray-500">
-                      <span>📅 {new Date(episode.createdAt).toLocaleDateString('ja-JP')}</span>
+                      <span>
+                        📅{" "}
+                        {new Date(episode.createdAt).toLocaleDateString(
+                          "ja-JP",
+                        )}
+                      </span>
                       <span>💾 {formatFileSize(episode.fileSize)}</span>
                       {episode.article.link && (
                         <a

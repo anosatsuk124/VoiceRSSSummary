@@ -40,13 +40,13 @@ export default function FeedManager() {
 
   const addFeed = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!newFeedUrl.trim()) {
       alert("フィードURLを入力してください");
       return;
     }
 
-    if (!newFeedUrl.startsWith('http')) {
+    if (!newFeedUrl.startsWith("http")) {
       alert("有効なURLを入力してください");
       return;
     }
@@ -96,10 +96,15 @@ export default function FeedManager() {
     <div className="space-y-6">
       {/* Add New Feed Form */}
       <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-100">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">新しいフィードを追加</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          新しいフィードを追加
+        </h3>
         <form onSubmit={addFeed} className="space-y-4">
           <div>
-            <label htmlFor="feedUrl" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="feedUrl"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               RSS フィード URL
             </label>
             <div className="flex space-x-3">
@@ -139,11 +144,6 @@ export default function FeedManager() {
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex items-center">
-            <div className="text-red-400">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-            </div>
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800">エラー</h3>
               <p className="text-sm text-red-700">{error}</p>
@@ -155,17 +155,25 @@ export default function FeedManager() {
       {/* Feeds List */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">登録済みフィード</h3>
+          <h3 className="text-lg font-semibold text-gray-900">
+            登録済みフィード
+          </h3>
           <span className="text-sm text-gray-500">{feeds.length} フィード</span>
         </div>
 
         {feeds.length === 0 ? (
           <div className="text-center py-12 bg-gray-50 rounded-xl">
             <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span role="img" aria-hidden="true" className="text-2xl">📡</span>
+              <span role="img" aria-hidden="true" className="text-2xl">
+                📡
+              </span>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">フィードがありません</h3>
-            <p className="text-gray-500">上のフォームから RSS フィードを追加してください</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              フィードがありません
+            </h3>
+            <p className="text-gray-500">
+              上のフォームから RSS フィードを追加してください
+            </p>
           </div>
         ) : (
           <div className="grid gap-4">
@@ -177,21 +185,25 @@ export default function FeedManager() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center space-x-3 mb-2">
-                      <div className={`w-3 h-3 rounded-full ${feed.active ? 'bg-green-400' : 'bg-gray-400'}`}></div>
+                      <div
+                        className={`w-3 h-3 rounded-full ${feed.active ? "bg-green-400" : "bg-gray-400"}`}
+                      ></div>
                       <h4 className="text-lg font-medium text-gray-900 truncate">
-                        {feed.title || 'タイトル未取得'}
+                        {feed.title || "タイトル未取得"}
                       </h4>
                     </div>
-                    
+
                     {feed.description && (
                       <p className="text-sm text-gray-600 mb-3 line-clamp-2">
                         {feed.description}
                       </p>
                     )}
-                    
+
                     <div className="space-y-2">
                       <div className="flex items-center space-x-2">
-                        <span className="text-xs font-medium text-gray-500">URL:</span>
+                        <span className="text-xs font-medium text-gray-500">
+                          URL:
+                        </span>
                         <a
                           href={feed.url}
                           target="_blank"
@@ -202,35 +214,41 @@ export default function FeedManager() {
                           {feed.url}
                         </a>
                       </div>
-                      
+
                       <div className="flex items-center space-x-4 text-xs text-gray-500">
-                        <span>追加日: {new Date(feed.createdAt).toLocaleDateString('ja-JP')}</span>
+                        <span>
+                          追加日:{" "}
+                          {new Date(feed.createdAt).toLocaleDateString("ja-JP")}
+                        </span>
                         {feed.lastUpdated && (
-                          <span>最終更新: {new Date(feed.lastUpdated).toLocaleDateString('ja-JP')}</span>
+                          <span>
+                            最終更新:{" "}
+                            {new Date(feed.lastUpdated).toLocaleDateString(
+                              "ja-JP",
+                            )}
+                          </span>
                         )}
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center space-x-2 ml-4">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      feed.active 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {feed.active ? 'アクティブ' : '無効'}
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        feed.active
+                          ? "bg-green-100 text-green-800"
+                          : "bg-gray-100 text-gray-800"
+                      }`}
+                    >
+                      {feed.active ? "アクティブ" : "無効"}
                     </span>
-                    
+
                     {/* Future: Add edit/delete buttons here */}
                     <button
                       className="text-gray-400 hover:text-gray-600 p-1"
                       title="設定"
                       aria-label={`${feed.title || feed.url}の設定`}
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                      </svg>
-                    </button>
+                    ></button>
                   </div>
                 </div>
               </div>
