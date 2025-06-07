@@ -8,6 +8,7 @@ import {
   deleteFeed,
   toggleFeedActive,
   getFeedByUrl,
+  getFeedById,
   fetchAllEpisodes,
   fetchEpisodesWithArticles,
   getFeedRequests,

@@ -193,6 +193,27 @@ export async function getFeedByUrl(url: string): Promise<Feed | null> {
   }
 }
 
+export async function getFeedById(id: string): Promise<Feed | null> {
+  try {
+    const stmt = db.prepare("SELECT * FROM feeds WHERE id = ?");
+    const row = stmt.get(id) as any;
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      url: row.url,
+      title: row.title,
+      description: row.description,
+      lastUpdated: row.last_updated,
+      createdAt: row.created_at,
+      active: Boolean(row.active),
+    };
+  } catch (error) {
+    console.error("Error getting feed by ID:", error);
+    throw error;
+  }
+}
+
 export async function getAllFeeds(): Promise<Feed[]> {
   try {
     const stmt = db.prepare(

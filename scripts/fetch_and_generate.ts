@@ -7,6 +7,7 @@ import { generateTTS } from "../services/tts.js";
 import {
   saveFeed,
   getFeedByUrl,
+  getFeedById,
   saveArticle,
   getUnprocessedArticles,
   markArticleAsProcessed,
@@ -294,7 +295,7 @@ async function generatePodcastForArticle(article: any): Promise<void> {
 
   try {
     // Get feed information for context
-    const feed = await getFeedByUrl(article.feedId);
+    const feed = await getFeedById(article.feedId);
     const feedTitle = feed?.title || "Unknown Feed";
 
     // Classify the article/feed

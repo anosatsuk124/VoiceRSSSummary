@@ -27,10 +27,15 @@ function EpisodeList() {
     try {
       setLoading(true)
       const response = await fetch('/api/episodes')
-      if (!response.ok) throw new Error('エピソードの取得に失敗しました')
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'エピソードの取得に失敗しました')
+      }
       const data = await response.json()
+      console.log('Fetched episodes:', data)
       setEpisodes(data)
     } catch (err) {
+      console.error('Episode fetch error:', err)
       setError(err instanceof Error ? err.message : 'エラーが発生しました')
     } finally {
       setLoading(false)
@@ -64,7 +69,14 @@ function EpisodeList() {
     return (
       <div className="empty-state">
         <p>エピソードがありません</p>
-        <p>フィード管理でRSSフィードを追加してください</p>
+        <p>フィードリクエストでRSSフィードをリクエストするか、管理者にバッチ処理の実行を依頼してください</p>
+        <button 
+          className="btn btn-secondary" 
+          onClick={fetchEpisodes}
+          style={{ marginTop: '10px' }}
+        >
+          再読み込み
+        </button>
       </div>
     )
   }
