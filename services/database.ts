@@ -289,6 +289,16 @@ export async function saveFeed(
       feed.active !== undefined ? (feed.active ? 1 : 0) : 1, // Default to active=1 if not specified
     );
 
+    try {
+      performDatabaseIntegrityFixes(db);
+      console.log(`Feed saved: ${feed.url}`);
+    } catch (error) {
+      console.error(
+        "Error performing integrity fixes after saving feed:",
+        error,
+      );
+    }
+
     return id;
   } catch (error) {
     console.error("Error saving feed:", error);
@@ -721,17 +731,6 @@ export async function saveEpisode(
       episode.fileSize || null,
       createdAt,
     );
-
-    try {
-      performDatabaseIntegrityFixes(db);
-      console.log(`Episode saved: ${episode}`);
-    } catch (error) {
-      console.error(
-        "Error performing integrity fixes after saving feed:",
-        error,
-      );
-    }
-
     return id;
   } catch (error) {
     console.error("Error saving episode:", error);
