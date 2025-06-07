@@ -3,7 +3,7 @@ import {
   openAI_ClassifyFeed,
   openAI_GeneratePodcastContent,
 } from "../services/llm.js";
-import { generateTTS } from "../services/tts.js";
+import { generateTTS, generateTTSWithoutQueue } from "../services/tts.js";
 import {
   saveFeed,
   getFeedByUrl,
@@ -208,15 +208,30 @@ async function processUnprocessedArticles(): Promise<void> {
 
     console.log(`🎯 Found ${unprocessedArticles.length} unprocessed articles`);
 
-    // Track articles that successfully generated audio
-    const successfullyGeneratedArticles: string[] = [];
+    // Track articles that successfully generated audio AND episodes
+    let successfullyGeneratedCount = 0;
 
     for (const article of unprocessedArticles) {
       try {
-        await generatePodcastForArticle(article);
-        await markArticleAsProcessed(article.id);
-        console.log(`✅ Podcast generated for: ${article.title}`);
-        successfullyGeneratedArticles.push(article.id);
+        const episodeCreated = await generatePodcastForArticle(article);
+        
+        // Only mark as processed and update RSS if episode was actually created
+        if (episodeCreated) {
+          await markArticleAsProcessed(article.id);
+          console.log(`✅ Podcast generated for: ${article.title}`);
+          successfullyGeneratedCount++;
+          
+          // Update RSS immediately after each successful episode creation
+          console.log(`📻 Updating podcast RSS after successful episode creation...`);
+          try {
+            await updatePodcastRSS();
+            console.log(`📻 RSS updated successfully for: ${article.title}`);
+          } catch (rssError) {
+            console.error(`❌ Failed to update RSS after episode creation for: ${article.title}`, rssError);
+          }
+        } else {
+          console.warn(`⚠️  Episode creation failed for: ${article.title} - not marking as processed`);
+        }
       } catch (error) {
         console.error(
           `❌ Failed to generate podcast for article: ${article.title}`,
@@ -226,10 +241,9 @@ async function processUnprocessedArticles(): Promise<void> {
       }
     }
 
-    // Only update RSS if at least one article was successfully processed
-    if (successfullyGeneratedArticles.length > 0) {
-      console.log(`📻 Updating podcast RSS for ${successfullyGeneratedArticles.length} new episodes...`);
-      await updatePodcastRSS();
+    console.log(`🎯 Batch processing completed: ${successfullyGeneratedCount} episodes successfully created`);
+    if (successfullyGeneratedCount === 0) {
+      console.log(`ℹ️  No episodes were successfully created in this batch`);
     }
   } catch (error) {
     console.error("💥 Error processing unprocessed articles:", error);
@@ -242,6 +256,8 @@ async function processUnprocessedArticles(): Promise<void> {
  */
 async function processRetryQueue(): Promise<void> {
   const { getQueueItems, updateQueueItemStatus, removeFromQueue } = await import("../services/database.js");
+  const { Database } = await import("bun:sqlite");
+  const db = new Database(config.paths.dbPath);
   
   console.log("🔄 Processing TTS retry queue...");
   
@@ -256,41 +272,65 @@ async function processRetryQueue(): Promise<void> {
 
     for (const item of queueItems) {
       try {
-        console.log(`🔁 Retrying TTS generation for: ${item.itemId} (attempt ${item.retryCount + 1})`);
+        console.log(`🔁 Retrying TTS generation for: ${item.itemId} (attempt ${item.retryCount + 1}/3)`);
         
         // Mark as processing
         await updateQueueItemStatus(item.id, 'processing');
         
-        // Attempt TTS generation
-        await generateTTS(item.itemId, item.scriptText, item.retryCount);
+        // Attempt TTS generation without re-queuing on failure
+        const audioFilePath = await generateTTSWithoutQueue(item.itemId, item.scriptText, item.retryCount);
         
-        // Success - remove from queue
+        // Success - remove from queue and update RSS
         await removeFromQueue(item.id);
         console.log(`✅ TTS retry successful for: ${item.itemId}`);
+        
+        // Update RSS immediately after successful retry
+        console.log(`📻 Updating podcast RSS after successful retry...`);
+        try {
+          await updatePodcastRSS();
+          console.log(`📻 RSS updated successfully after retry for: ${item.itemId}`);
+        } catch (rssError) {
+          console.error(`❌ Failed to update RSS after retry for: ${item.itemId}`, rssError);
+        }
         
       } catch (error) {
         console.error(`❌ TTS retry failed for: ${item.itemId}`, error);
         
-        if (item.retryCount >= 2) {
-          // Max retries reached, mark as failed
-          await updateQueueItemStatus(item.id, 'failed');
-          console.log(`💀 Max retries reached for: ${item.itemId}, marking as failed`);
-        } else {
-          // Reset to pending for next retry
-          await updateQueueItemStatus(item.id, 'pending');
+        try {
+          if (item.retryCount >= 2) {
+            // Max retries reached, mark as failed
+            await updateQueueItemStatus(item.id, 'failed');
+            console.log(`💀 Max retries reached for: ${item.itemId}, marking as failed`);
+          } else {
+            // Increment retry count and reset to pending for next retry
+            const updatedRetryCount = item.retryCount + 1;
+            const stmt = db.prepare("UPDATE tts_queue SET retry_count = ?, status = 'pending' WHERE id = ?");
+            stmt.run(updatedRetryCount, item.id);
+            console.log(`🔄 Updated retry count to ${updatedRetryCount} for: ${item.itemId}`);
+          }
+        } catch (dbError) {
+          console.error(`❌ Failed to update queue status for: ${item.itemId}`, dbError);
         }
       }
     }
   } catch (error) {
     console.error("💥 Error processing retry queue:", error);
     throw error;
+  } finally {
+    // Clean up database connection
+    try {
+      db.close();
+    } catch (closeError) {
+      console.warn("⚠️ Warning: Failed to close database connection:", closeError);
+    }
   }
 }
 
 /**
  * Generate podcast for a single article
+ * Returns true if episode was successfully created, false otherwise
  */
-async function generatePodcastForArticle(article: any): Promise<void> {
+async function generatePodcastForArticle(article: any): Promise<boolean> {
   console.log(`🎤 Generating podcast for: ${article.title}`);
 
   try {
@@ -315,31 +355,66 @@ async function generatePodcastForArticle(article: any): Promise<void> {
     // Generate unique ID for the episode
     const episodeId = crypto.randomUUID();
 
-    // Generate TTS audio
-    const audioFilePath = await generateTTS(episodeId, podcastContent);
-    console.log(`🔊 Audio generated: ${audioFilePath}`);
+    // Generate TTS audio - this is the critical step that can fail
+    let audioFilePath: string;
+    try {
+      audioFilePath = await generateTTS(episodeId, podcastContent);
+      console.log(`🔊 Audio generated: ${audioFilePath}`);
+    } catch (ttsError) {
+      console.error(`❌ TTS generation failed for ${article.title}:`, ttsError);
+      
+      // Check if error indicates item was added to retry queue
+      const errorMessage = ttsError instanceof Error ? ttsError.message : String(ttsError);
+      if (errorMessage.includes('added to retry queue')) {
+        console.log(`📋 Article will be retried later via TTS queue: ${article.title}`);
+        // Don't mark as processed - leave it for retry
+        return false;
+      } else {
+        console.error(`💀 TTS generation permanently failed for ${article.title} - max retries exceeded`);
+        // Max retries exceeded, don't create episode but mark as processed to avoid infinite retry
+        return false;
+      }
+    }
+
+    // Verify audio file was actually created and is valid
+    try {
+      const audioStats = await getAudioFileStats(audioFilePath);
+      if (audioStats.size === 0) {
+        console.error(`❌ Audio file is empty for ${article.title}: ${audioFilePath}`);
+        return false;
+      }
+    } catch (statsError) {
+      console.error(`❌ Cannot access audio file for ${article.title}: ${audioFilePath}`, statsError);
+      return false;
+    }
 
     // Get audio file stats
     const audioStats = await getAudioFileStats(audioFilePath);
 
-    // Save episode
-    await saveEpisode({
-      articleId: article.id,
-      title: `${category}: ${article.title}`,
-      description:
-        article.description || `Podcast episode for: ${article.title}`,
-      audioPath: audioFilePath,
-      duration: audioStats.duration,
-      fileSize: audioStats.size,
-    });
+    // Save episode - only if we have valid audio
+    try {
+      await saveEpisode({
+        articleId: article.id,
+        title: `${category}: ${article.title}`,
+        description:
+          article.description || `Podcast episode for: ${article.title}`,
+        audioPath: audioFilePath,
+        duration: audioStats.duration,
+        fileSize: audioStats.size,
+      });
 
-    console.log(`💾 Episode saved for article: ${article.title}`);
+      console.log(`💾 Episode saved for article: ${article.title}`);
+      return true;
+    } catch (saveError) {
+      console.error(`❌ Failed to save episode for ${article.title}:`, saveError);
+      return false;
+    }
   } catch (error) {
     console.error(
       `💥 Error generating podcast for article: ${article.title}`,
       error,
     );
-    throw error;
+    return false;
   }
 }
 
