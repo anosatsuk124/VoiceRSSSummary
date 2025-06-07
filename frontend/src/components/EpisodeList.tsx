@@ -34,7 +34,7 @@ function EpisodeList() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentAudio, setCurrentAudio] = useState<string | null>(null)
-  const [useDatabase, setUseDatabase] = useState(true)
+  const [useDatabase, setUseDatabase] = useState(false)
 
   useEffect(() => {
     fetchEpisodes()
@@ -43,6 +43,7 @@ function EpisodeList() {
   const fetchEpisodes = async () => {
     try {
       setLoading(true)
+      setError(null)
       
       if (useDatabase) {
         // Try to fetch from database first
@@ -51,9 +52,18 @@ function EpisodeList() {
           throw new Error('データベースからの取得に失敗しました')
         }
         const data = await response.json()
-        setEpisodes(data.episodes || [])
+        const dbEpisodes = data.episodes || []
+        
+        if (dbEpisodes.length === 0) {
+          // Database is empty, fallback to XML
+          console.log('Database is empty, falling back to XML parsing...')
+          setUseDatabase(false)
+          return
+        }
+        
+        setEpisodes(dbEpisodes)
       } else {
-        // Fallback to XML parsing (existing functionality)
+        // Use XML parsing as primary source
         const response = await fetch('/api/episodes-from-xml')
         if (!response.ok) {
           const errorData = await response.json()
@@ -168,9 +178,14 @@ function EpisodeList() {
     <div>
       <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>エピソード一覧 ({episodes.length}件)</h2>
-        <button className="btn btn-secondary" onClick={fetchEpisodes}>
-          更新
-        </button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <span style={{ fontSize: '12px', color: '#666' }}>
+            データソース: {useDatabase ? 'データベース' : 'XML'}
+          </span>
+          <button className="btn btn-secondary" onClick={fetchEpisodes}>
+            更新
+          </button>
+        </div>
       </div>
 
       <table className="table">
