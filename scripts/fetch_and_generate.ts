@@ -4,13 +4,13 @@ import {
   openAI_GeneratePodcastContent,
 } from "../services/llm.js";
 import { generateTTS } from "../services/tts.js";
-import { 
-  saveFeed, 
-  getFeedByUrl, 
-  saveArticle, 
-  getUnprocessedArticles, 
+import {
+  saveFeed,
+  getFeedByUrl,
+  saveArticle,
+  getUnprocessedArticles,
   markArticleAsProcessed,
-  saveEpisode
+  saveEpisode,
 } from "../services/database.js";
 import { updatePodcastRSS } from "../services/podcast.js";
 import { config } from "../services/config.js";
@@ -34,14 +34,14 @@ interface FeedItem {
 export async function batchProcess(): Promise<void> {
   try {
     console.log("🚀 Starting enhanced batch process...");
-    
+
     // Load feed URLs from file
     const feedUrls = await loadFeedUrls();
     if (feedUrls.length === 0) {
       console.log("ℹ️  No feed URLs found.");
       return;
     }
-    
+
     console.log(`📡 Processing ${feedUrls.length} feeds...`);
 
     // Process each feed URL
@@ -57,10 +57,10 @@ export async function batchProcess(): Promise<void> {
     // Process unprocessed articles and generate podcasts
     await processUnprocessedArticles();
 
-    // Update RSS feed
-    await updatePodcastRSS();
-    
-    console.log("✅ Enhanced batch process completed:", new Date().toISOString());
+    console.log(
+      "✅ Enhanced batch process completed:",
+      new Date().toISOString(),
+    );
   } catch (error) {
     console.error("💥 Batch process failed:", error);
     throw error;
@@ -78,7 +78,9 @@ async function loadFeedUrls(): Promise<string[]> {
       .map((url) => url.trim())
       .filter((url) => url.length > 0 && !url.startsWith("#"));
   } catch (err) {
-    console.warn(`⚠️  Failed to read feed URLs file: ${config.paths.feedUrlsFile}`);
+    console.warn(
+      `⚠️  Failed to read feed URLs file: ${config.paths.feedUrlsFile}`,
+    );
     console.warn("📝 Please create the file with one RSS URL per line.");
     return [];
   }
@@ -88,12 +90,12 @@ async function loadFeedUrls(): Promise<string[]> {
  * Process a single feed URL and discover new articles
  */
 async function processFeedUrl(url: string): Promise<void> {
-  if (!url || !url.startsWith('http')) {
+  if (!url || !url.startsWith("http")) {
     throw new Error(`Invalid feed URL: ${url}`);
   }
-  
+
   console.log(`🔍 Processing feed: ${url}`);
-  
+
   try {
     // Parse RSS feed
     const parser = new Parser<FeedItem>();
@@ -108,7 +110,7 @@ async function processFeedUrl(url: string): Promise<void> {
         title: feed.title,
         description: feed.description,
         lastUpdated: new Date().toISOString(),
-        active: true
+        active: true,
       });
       feedRecord = await getFeedByUrl(url);
     }
@@ -118,8 +120,11 @@ async function processFeedUrl(url: string): Promise<void> {
     }
 
     // Process feed items and save new articles
-    const newArticlesCount = await discoverNewArticles(feedRecord, feed.items || []);
-    
+    const newArticlesCount = await discoverNewArticles(
+      feedRecord,
+      feed.items || [],
+    );
+
     // Update feed last updated timestamp
     if (newArticlesCount > 0) {
       await saveFeed({
@@ -127,12 +132,13 @@ async function processFeedUrl(url: string): Promise<void> {
         title: feedRecord.title,
         description: feedRecord.description,
         lastUpdated: new Date().toISOString(),
-        active: feedRecord.active
+        active: feedRecord.active,
       });
     }
 
-    console.log(`📊 Feed processed: ${feed.title || url} (${newArticlesCount} new articles)`);
-    
+    console.log(
+      `📊 Feed processed: ${feed.title || url} (${newArticlesCount} new articles)`,
+    );
   } catch (error) {
     console.error(`💥 Error processing feed ${url}:`, error);
     throw error;
@@ -142,9 +148,12 @@ async function processFeedUrl(url: string): Promise<void> {
 /**
  * Discover and save new articles from feed items
  */
-async function discoverNewArticles(feed: any, items: FeedItem[]): Promise<number> {
+async function discoverNewArticles(
+  feed: any,
+  items: FeedItem[],
+): Promise<number> {
   let newArticlesCount = 0;
-  
+
   for (const item of items) {
     if (!item.title || !item.link) {
       console.warn("⚠️  Skipping item without title or link");
@@ -160,7 +169,7 @@ async function discoverNewArticles(feed: any, items: FeedItem[]): Promise<number
         description: item.description || item.contentSnippet,
         content: item.content,
         pubDate: item.pubDate || new Date().toISOString(),
-        processed: false
+        processed: false,
       });
 
       // Check if this is truly a new article
@@ -168,12 +177,11 @@ async function discoverNewArticles(feed: any, items: FeedItem[]): Promise<number
         newArticlesCount++;
         console.log(`📄 New article discovered: ${item.title}`);
       }
-      
     } catch (error) {
       console.error(`❌ Error saving article: ${item.title}`, error);
     }
   }
-  
+
   return newArticlesCount;
 }
 
@@ -182,11 +190,11 @@ async function discoverNewArticles(feed: any, items: FeedItem[]): Promise<number
  */
 async function processUnprocessedArticles(): Promise<void> {
   console.log("🎧 Processing unprocessed articles...");
-  
+
   try {
     // Get unprocessed articles (limit to prevent overwhelming)
     const unprocessedArticles = await getUnprocessedArticles(20);
-    
+
     if (unprocessedArticles.length === 0) {
       console.log("ℹ️  No unprocessed articles found.");
       return;
@@ -199,12 +207,15 @@ async function processUnprocessedArticles(): Promise<void> {
         await generatePodcastForArticle(article);
         await markArticleAsProcessed(article.id);
         console.log(`✅ Podcast generated for: ${article.title}`);
+        await updatePodcastRSS(); // Update RSS after each article
       } catch (error) {
-        console.error(`❌ Failed to generate podcast for article: ${article.title}`, error);
+        console.error(
+          `❌ Failed to generate podcast for article: ${article.title}`,
+          error,
+        );
         // Don't mark as processed if generation failed
       }
     }
-    
   } catch (error) {
     console.error("💥 Error processing unprocessed articles:", error);
     throw error;
@@ -216,28 +227,29 @@ async function processUnprocessedArticles(): Promise<void> {
  */
 async function generatePodcastForArticle(article: any): Promise<void> {
   console.log(`🎤 Generating podcast for: ${article.title}`);
-  
+
   try {
     // Get feed information for context
     const feed = await getFeedByUrl(article.feedId);
     const feedTitle = feed?.title || "Unknown Feed";
-    
+
     // Classify the article/feed
-    const category = await openAI_ClassifyFeed(`${feedTitle}: ${article.title}`);
+    const category = await openAI_ClassifyFeed(
+      `${feedTitle}: ${article.title}`,
+    );
     console.log(`🏷️  Article classified as: ${category}`);
 
     // Generate podcast content for this single article
-    const podcastContent = await openAI_GeneratePodcastContent(
-      article.title,
-      [{
+    const podcastContent = await openAI_GeneratePodcastContent(article.title, [
+      {
         title: article.title,
-        link: article.link
-      }]
-    );
+        link: article.link,
+      },
+    ]);
 
     // Generate unique ID for the episode
     const episodeId = crypto.randomUUID();
-    
+
     // Generate TTS audio
     const audioFilePath = await generateTTS(episodeId, podcastContent);
     console.log(`🔊 Audio generated: ${audioFilePath}`);
@@ -249,16 +261,19 @@ async function generatePodcastForArticle(article: any): Promise<void> {
     await saveEpisode({
       articleId: article.id,
       title: `${category}: ${article.title}`,
-      description: article.description || `Podcast episode for: ${article.title}`,
+      description:
+        article.description || `Podcast episode for: ${article.title}`,
       audioPath: audioFilePath,
       duration: audioStats.duration,
-      fileSize: audioStats.size
+      fileSize: audioStats.size,
     });
 
     console.log(`💾 Episode saved for article: ${article.title}`);
-    
   } catch (error) {
-    console.error(`💥 Error generating podcast for article: ${article.title}`, error);
+    console.error(
+      `💥 Error generating podcast for article: ${article.title}`,
+      error,
+    );
     throw error;
   }
 }
@@ -266,18 +281,23 @@ async function generatePodcastForArticle(article: any): Promise<void> {
 /**
  * Get audio file statistics
  */
-async function getAudioFileStats(audioFileName: string): Promise<{ duration?: number, size: number }> {
+async function getAudioFileStats(
+  audioFileName: string,
+): Promise<{ duration?: number; size: number }> {
   try {
     const audioPath = `${config.paths.podcastAudioDir}/${audioFileName}`;
     const stats = await fs.stat(audioPath);
-    
+
     return {
       size: stats.size,
       // TODO: Add duration calculation using ffprobe if needed
-      duration: undefined
+      duration: undefined,
     };
   } catch (error) {
-    console.warn(`⚠️  Could not get audio file stats for ${audioFileName}:`, error);
+    console.warn(
+      `⚠️  Could not get audio file stats for ${audioFileName}:`,
+      error,
+    );
     return { size: 0 };
   }
 }
@@ -381,17 +401,17 @@ async function getAudioFileStats(audioFileName: string): Promise<{ duration?: nu
 
 // Export function for use in server
 export async function addNewFeedUrl(feedUrl: string): Promise<void> {
-  if (!feedUrl || !feedUrl.startsWith('http')) {
-    throw new Error('Invalid feed URL');
+  if (!feedUrl || !feedUrl.startsWith("http")) {
+    throw new Error("Invalid feed URL");
   }
-  
+
   try {
     // Add to feeds table
     await saveFeed({
       url: feedUrl,
-      active: true
+      active: true,
     });
-    
+
     console.log(`✅ Feed URL added: ${feedUrl}`);
   } catch (error) {
     console.error(`❌ Failed to add feed URL: ${feedUrl}`, error);
