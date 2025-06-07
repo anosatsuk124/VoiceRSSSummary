@@ -10,6 +10,11 @@ interface Episode {
   audioLength: string
   guid: string
   link: string
+  feedTitle?: string
+  feedUrl?: string
+  articleTitle?: string
+  articleLink?: string
+  articlePubDate?: string
 }
 
 interface EpisodeWithFeedInfo {
@@ -81,12 +86,12 @@ function EpisodeList() {
           audioPath: episode.audioUrl,
           createdAt: episode.pubDate,
           articleId: episode.guid,
-          articleTitle: episode.title,
-          articleLink: episode.link,
-          articlePubDate: episode.pubDate,
+          articleTitle: episode.articleTitle || episode.title,
+          articleLink: episode.articleLink || episode.link,
+          articlePubDate: episode.articlePubDate || episode.pubDate,
           feedId: '',
-          feedTitle: 'RSS Feed',
-          feedUrl: ''
+          feedTitle: episode.feedTitle || 'RSS Feed',
+          feedUrl: episode.feedUrl || ''
         }))
         setEpisodes(convertedEpisodes)
       }

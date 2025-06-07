@@ -147,7 +147,12 @@ app.get("/api/episodes-from-xml", async (c) => {
         audioUrl: item.enclosure?.[0]?.$?.url || '',
         audioLength: item.enclosure?.[0]?.$?.length || '0',
         guid: item.guid?.[0] || '',
-        link: item.link?.[0] || ''
+        link: item.link?.[0] || '',
+        feedTitle: item['source:feedTitle']?.[0] || '',
+        feedUrl: item['source:feedUrl']?.[0] || '',
+        articleTitle: item['source:articleTitle']?.[0] || '',
+        articleLink: item['source:articleLink']?.[0] || '',
+        articlePubDate: item['source:articlePubDate']?.[0] || ''
       };
       episodes.push(episode);
     }
@@ -209,7 +214,12 @@ app.get("/api/episode/:episodeId", async (c) => {
       audioUrl: targetItem.enclosure?.[0]?.$?.url || '',
       audioLength: targetItem.enclosure?.[0]?.$?.length || '0',
       guid: targetItem.guid?.[0] || '',
-      link: targetItem.link?.[0] || ''
+      link: targetItem.link?.[0] || '',
+      feedTitle: targetItem['source:feedTitle']?.[0] || '',
+      feedUrl: targetItem['source:feedUrl']?.[0] || '',
+      articleTitle: targetItem['source:articleTitle']?.[0] || '',
+      articleLink: targetItem['source:articleLink']?.[0] || '',
+      articlePubDate: targetItem['source:articlePubDate']?.[0] || ''
     };
     
     return c.json({ episode });
