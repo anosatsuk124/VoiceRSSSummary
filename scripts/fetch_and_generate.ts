@@ -193,7 +193,7 @@ async function processUnprocessedArticles(): Promise<void> {
 
   try {
     // Get unprocessed articles (limit to prevent overwhelming)
-    const unprocessedArticles = await getUnprocessedArticles(20);
+    const unprocessedArticles = await getUnprocessedArticles(50);
 
     if (unprocessedArticles.length === 0) {
       console.log("ℹ️  No unprocessed articles found.");
