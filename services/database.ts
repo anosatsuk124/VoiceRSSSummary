@@ -3,6 +3,79 @@ import fs from "fs";
 import crypto from "crypto";
 import { config } from "./config.js";
 
+// Database integrity fixes function
+function performDatabaseIntegrityFixes(db: Database): void {
+  console.log("🔧 Performing database integrity checks...");
+  
+  try {
+    // Fix 1: Set active flag to 1 for feeds where it's NULL
+    const nullActiveFeeds = db.prepare("UPDATE feeds SET active = 1 WHERE active IS NULL").run();
+    if (nullActiveFeeds.changes > 0) {
+      console.log(`✅ Fixed ${nullActiveFeeds.changes} feeds with NULL active flag`);
+    }
+
+    // Fix 2: Fix orphaned articles (articles referencing non-existent feeds)
+    const orphanedArticles = db.prepare(`
+      SELECT a.id, a.link, a.title 
+      FROM articles a 
+      LEFT JOIN feeds f ON a.feed_id = f.id 
+      WHERE f.id IS NULL
+    `).all() as any[];
+
+    if (orphanedArticles.length > 0) {
+      console.log(`🔍 Found ${orphanedArticles.length} orphaned articles, attempting to fix...`);
+      
+      for (const article of orphanedArticles) {
+        // Try to match article to feed based on URL domain
+        const articleDomain = extractDomain(article.link);
+        if (articleDomain) {
+          const matchingFeed = db.prepare(`
+            SELECT id FROM feeds 
+            WHERE url LIKE ? OR url LIKE ? 
+            ORDER BY created_at DESC 
+            LIMIT 1
+          `).get(`%${articleDomain}%`, `%${articleDomain.replace('www.', '')}%`) as any;
+
+          if (matchingFeed) {
+            db.prepare("UPDATE articles SET feed_id = ? WHERE id = ?")
+              .run(matchingFeed.id, article.id);
+            console.log(`✅ Fixed article "${article.title}" -> feed ${matchingFeed.id}`);
+          } else {
+            console.log(`⚠️  Could not find matching feed for article: ${article.title} (${articleDomain})`);
+          }
+        }
+      }
+    }
+
+    // Fix 3: Ensure all episodes have valid article references
+    const orphanedEpisodes = db.prepare(`
+      SELECT e.id, e.title, e.article_id 
+      FROM episodes e 
+      LEFT JOIN articles a ON e.article_id = a.id 
+      WHERE a.id IS NULL
+    `).all() as any[];
+
+    if (orphanedEpisodes.length > 0) {
+      console.log(`⚠️  Found ${orphanedEpisodes.length} episodes with invalid article references`);
+      // We could delete these or try to fix them, but for now just log
+    }
+
+    console.log("✅ Database integrity checks completed");
+  } catch (error) {
+    console.error("❌ Error during database integrity fixes:", error);
+  }
+}
+
+// Helper function to extract domain from URL
+function extractDomain(url: string): string | null {
+  try {
+    const urlObj = new URL(url);
+    return urlObj.hostname;
+  } catch {
+    return null;
+  }
+}
+
 // Initialize database with proper error handling
 function initializeDatabase(): Database {
   // Ensure data directory exists
@@ -98,6 +171,9 @@ function initializeDatabase(): Database {
   CREATE INDEX IF NOT EXISTS idx_feed_requests_status ON feed_requests(status);
   CREATE INDEX IF NOT EXISTS idx_feed_requests_created_at ON feed_requests(created_at);`);
 
+  // Perform database integrity checks and fixes
+  performDatabaseIntegrityFixes(db);
+
   return db;
 }
 
@@ -181,7 +257,7 @@ export async function saveFeed(
       feed.description || null,
       feed.lastUpdated || null,
       createdAt,
-      feed.active ? 1 : 0,
+      feed.active !== undefined ? (feed.active ? 1 : 0) : 1, // Default to active=1 if not specified
     );
     return id;
   } catch (error) {

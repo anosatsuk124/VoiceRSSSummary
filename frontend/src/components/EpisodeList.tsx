@@ -34,7 +34,7 @@ function EpisodeList() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentAudio, setCurrentAudio] = useState<string | null>(null)
-  const [useDatabase, setUseDatabase] = useState(false)
+  const [useDatabase, setUseDatabase] = useState(true)
 
   useEffect(() => {
     fetchEpisodes()

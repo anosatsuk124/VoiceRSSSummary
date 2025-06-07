@@ -110,9 +110,9 @@ app.get("/index.html", serveIndex);
 // API endpoints for frontend
 app.get("/api/episodes", async (c) => {
   try {
-    const { fetchEpisodesWithArticles } = await import("./services/database.js");
-    const episodes = await fetchEpisodesWithArticles();
-    return c.json(episodes);
+    const { fetchEpisodesWithFeedInfo } = await import("./services/database.js");
+    const episodes = await fetchEpisodesWithFeedInfo();
+    return c.json({ episodes });
   } catch (error) {
     console.error("Error fetching episodes:", error);
     return c.json({ error: "Failed to fetch episodes" }, 500);
