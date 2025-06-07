@@ -19,11 +19,11 @@ export async function generateTTS(
   if (!itemId || itemId.trim() === "") {
     throw new Error("Item ID is required for TTS generation");
   }
-  
+
   if (!scriptText || scriptText.trim() === "") {
     throw new Error("Script text is required for TTS generation");
   }
-  
+
   console.log(`TTS生成開始: ${itemId}`);
   const encodedText = encodeURIComponent(scriptText);
 
@@ -41,7 +41,9 @@ export async function generateTTS(
 
     if (!queryResponse.ok) {
       const errorText = await queryResponse.text();
-      throw new Error(`VOICEVOX audio query failed (${queryResponse.status}): ${errorText}`);
+      throw new Error(
+        `VOICEVOX audio query failed (${queryResponse.status}): ${errorText}`,
+      );
     }
 
     const audioQuery = await queryResponse.json();
@@ -53,12 +55,15 @@ export async function generateTTS(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(audioQuery),
+      signal: AbortSignal.timeout(10000000), // タイムアウトを10分に設定
     });
 
     if (!audioResponse.ok) {
       const errorText = await audioResponse.text();
       console.error(`音声合成失敗: ${itemId}`);
-      throw new Error(`VOICEVOX synthesis failed (${audioResponse.status}): ${errorText}`);
+      throw new Error(
+        `VOICEVOX synthesis failed (${audioResponse.status}): ${errorText}`,
+      );
     }
 
     const audioArrayBuffer = await audioResponse.arrayBuffer();
@@ -78,7 +83,7 @@ export async function generateTTS(
     console.log(`WAVファイル保存完了: ${wavFilePath}`);
 
     console.log(`MP3変換開始: ${wavFilePath} -> ${mp3FilePath}`);
-    
+
     const ffmpegCmd = ffmpegPath || "ffmpeg";
     const result = Bun.spawnSync({
       cmd: [
@@ -93,9 +98,11 @@ export async function generateTTS(
         mp3FilePath,
       ],
     });
-    
+
     if (result.exitCode !== 0) {
-      const stderr = result.stderr ? new TextDecoder().decode(result.stderr) : "Unknown error";
+      const stderr = result.stderr
+        ? new TextDecoder().decode(result.stderr)
+        : "Unknown error";
       throw new Error(`FFmpeg conversion failed: ${stderr}`);
     }
 
@@ -103,12 +110,14 @@ export async function generateTTS(
     if (fs.existsSync(wavFilePath)) {
       fs.unlinkSync(wavFilePath);
     }
-    
+
     console.log(`TTS生成完了: ${itemId}`);
 
     return path.basename(mp3FilePath);
   } catch (error) {
     console.error("Error generating TTS:", error);
-    throw new Error(`Failed to generate TTS: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to generate TTS: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
   }
 }
