@@ -53,6 +53,19 @@ CREATE TABLE IF NOT EXISTS tts_queue (
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'failed'))
 );
 
+-- Feed requests from users
+CREATE TABLE IF NOT EXISTS feed_requests (
+  id TEXT PRIMARY KEY,
+  url TEXT NOT NULL,
+  requested_by TEXT,
+  request_message TEXT,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  created_at TEXT NOT NULL,
+  reviewed_at TEXT,
+  reviewed_by TEXT,
+  admin_notes TEXT
+);
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_articles_feed_id ON articles(feed_id);
 CREATE INDEX IF NOT EXISTS idx_articles_pub_date ON articles(pub_date);
@@ -61,3 +74,5 @@ CREATE INDEX IF NOT EXISTS idx_episodes_article_id ON episodes(article_id);
 CREATE INDEX IF NOT EXISTS idx_feeds_active ON feeds(active);
 CREATE INDEX IF NOT EXISTS idx_tts_queue_status ON tts_queue(status);
 CREATE INDEX IF NOT EXISTS idx_tts_queue_created_at ON tts_queue(created_at);
+CREATE INDEX IF NOT EXISTS idx_feed_requests_status ON feed_requests(status);
+CREATE INDEX IF NOT EXISTS idx_feed_requests_created_at ON feed_requests(created_at);

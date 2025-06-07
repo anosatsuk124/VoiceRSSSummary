@@ -10,6 +10,8 @@ import {
   getFeedByUrl,
   fetchAllEpisodes,
   fetchEpisodesWithArticles,
+  getFeedRequests,
+  updateFeedRequestStatus,
 } from "./services/database.js";
 import { batchProcess, addNewFeedUrl } from "./scripts/fetch_and_generate.js";
 
@@ -200,17 +202,102 @@ app.get("/api/admin/episodes/simple", async (c) => {
   }
 });
 
+// Feed requests management
+app.get("/api/admin/feed-requests", async (c) => {
+  try {
+    const status = c.req.query("status");
+    const requests = await getFeedRequests(status);
+    return c.json(requests);
+  } catch (error) {
+    console.error("Error fetching feed requests:", error);
+    return c.json({ error: "Failed to fetch feed requests" }, 500);
+  }
+});
+
+app.patch("/api/admin/feed-requests/:id/approve", async (c) => {
+  try {
+    const requestId = c.req.param("id");
+    const body = await c.req.json();
+    const { adminNotes } = body;
+    
+    // First get the request to get the URL
+    const requests = await getFeedRequests();
+    const request = requests.find(r => r.id === requestId);
+    
+    if (!request) {
+      return c.json({ error: "Feed request not found" }, 404);
+    }
+    
+    if (request.status !== 'pending') {
+      return c.json({ error: "Feed request already processed" }, 400);
+    }
+    
+    // Add the feed
+    await addNewFeedUrl(request.url);
+    
+    // Update request status
+    const updated = await updateFeedRequestStatus(
+      requestId, 
+      'approved', 
+      'admin',
+      adminNotes
+    );
+    
+    if (!updated) {
+      return c.json({ error: "Failed to update request status" }, 500);
+    }
+    
+    return c.json({ 
+      success: true, 
+      message: "Feed request approved and feed added successfully" 
+    });
+  } catch (error) {
+    console.error("Error approving feed request:", error);
+    return c.json({ error: "Failed to approve feed request" }, 500);
+  }
+});
+
+app.patch("/api/admin/feed-requests/:id/reject", async (c) => {
+  try {
+    const requestId = c.req.param("id");
+    const body = await c.req.json();
+    const { adminNotes } = body;
+    
+    const updated = await updateFeedRequestStatus(
+      requestId, 
+      'rejected', 
+      'admin',
+      adminNotes
+    );
+    
+    if (!updated) {
+      return c.json({ error: "Feed request not found" }, 404);
+    }
+    
+    return c.json({ 
+      success: true, 
+      message: "Feed request rejected successfully" 
+    });
+  } catch (error) {
+    console.error("Error rejecting feed request:", error);
+    return c.json({ error: "Failed to reject feed request" }, 500);
+  }
+});
+
 // System management
 app.get("/api/admin/stats", async (c) => {
   try {
     const feeds = await getAllFeedsIncludingInactive();
     const episodes = await fetchAllEpisodes();
+    const feedRequests = await getFeedRequests();
     
     const stats = {
       totalFeeds: feeds.length,
       activeFeeds: feeds.filter(f => f.active).length,
       inactiveFeeds: feeds.filter(f => !f.active).length,
       totalEpisodes: episodes.length,
+      pendingRequests: feedRequests.filter(r => r.status === 'pending').length,
+      totalRequests: feedRequests.length,
       lastUpdated: new Date().toISOString(),
       adminPort: config.admin.port,
       authEnabled: !!(config.admin.username && config.admin.password),

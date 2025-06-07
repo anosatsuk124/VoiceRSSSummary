@@ -16,6 +16,12 @@ function initializeDatabase(): Database {
   }
 
   const db = new Database(config.paths.dbPath);
+  
+  // Enable WAL mode for better concurrent access
+  db.exec("PRAGMA journal_mode = WAL;");
+  db.exec("PRAGMA synchronous = NORMAL;");
+  db.exec("PRAGMA cache_size = 1000;");
+  db.exec("PRAGMA temp_store = memory;");
 
   // Ensure schema is set up - use the complete schema
   db.exec(`CREATE TABLE IF NOT EXISTS feeds (
@@ -70,13 +76,27 @@ function initializeDatabase(): Database {
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'failed'))
   );
 
+  CREATE TABLE IF NOT EXISTS feed_requests (
+    id TEXT PRIMARY KEY,
+    url TEXT NOT NULL,
+    requested_by TEXT,
+    request_message TEXT,
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    created_at TEXT NOT NULL,
+    reviewed_at TEXT,
+    reviewed_by TEXT,
+    admin_notes TEXT
+  );
+
   CREATE INDEX IF NOT EXISTS idx_articles_feed_id ON articles(feed_id);
   CREATE INDEX IF NOT EXISTS idx_articles_pub_date ON articles(pub_date);
   CREATE INDEX IF NOT EXISTS idx_articles_processed ON articles(processed);
   CREATE INDEX IF NOT EXISTS idx_episodes_article_id ON episodes(article_id);
   CREATE INDEX IF NOT EXISTS idx_feeds_active ON feeds(active);
   CREATE INDEX IF NOT EXISTS idx_tts_queue_status ON tts_queue(status);
-  CREATE INDEX IF NOT EXISTS idx_tts_queue_created_at ON tts_queue(created_at);`);
+  CREATE INDEX IF NOT EXISTS idx_tts_queue_created_at ON tts_queue(created_at);
+  CREATE INDEX IF NOT EXISTS idx_feed_requests_status ON feed_requests(status);
+  CREATE INDEX IF NOT EXISTS idx_feed_requests_created_at ON feed_requests(created_at);`);
 
   return db;
 }
@@ -597,6 +617,83 @@ export async function removeFromQueue(queueId: string): Promise<void> {
     stmt.run(queueId);
   } catch (error) {
     console.error("Error removing from queue:", error);
+    throw error;
+  }
+}
+
+// Feed Request management functions
+export interface FeedRequest {
+  id: string;
+  url: string;
+  requestedBy?: string;
+  requestMessage?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  adminNotes?: string;
+}
+
+export async function submitFeedRequest(
+  request: Omit<FeedRequest, "id" | "createdAt" | "status">
+): Promise<string> {
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+
+  try {
+    const stmt = db.prepare(
+      "INSERT INTO feed_requests (id, url, requested_by, request_message, status, created_at) VALUES (?, ?, ?, ?, 'pending', ?)",
+    );
+    stmt.run(id, request.url, request.requestedBy || null, request.requestMessage || null, createdAt);
+    console.log(`Feed request submitted: ${request.url}`);
+    return id;
+  } catch (error) {
+    console.error("Error submitting feed request:", error);
+    throw error;
+  }
+}
+
+export async function getFeedRequests(status?: string): Promise<FeedRequest[]> {
+  try {
+    const sql = status
+      ? "SELECT * FROM feed_requests WHERE status = ? ORDER BY created_at DESC"
+      : "SELECT * FROM feed_requests ORDER BY created_at DESC";
+    
+    const stmt = db.prepare(sql);
+    const rows = status ? stmt.all(status) : stmt.all();
+
+    return (rows as any[]).map((row) => ({
+      id: row.id,
+      url: row.url,
+      requestedBy: row.requested_by,
+      requestMessage: row.request_message,
+      status: row.status,
+      createdAt: row.created_at,
+      reviewedAt: row.reviewed_at,
+      reviewedBy: row.reviewed_by,
+      adminNotes: row.admin_notes,
+    }));
+  } catch (error) {
+    console.error("Error getting feed requests:", error);
+    throw error;
+  }
+}
+
+export async function updateFeedRequestStatus(
+  requestId: string,
+  status: 'approved' | 'rejected',
+  reviewedBy?: string,
+  adminNotes?: string,
+): Promise<boolean> {
+  try {
+    const reviewedAt = new Date().toISOString();
+    const stmt = db.prepare(
+      "UPDATE feed_requests SET status = ?, reviewed_at = ?, reviewed_by = ?, admin_notes = ? WHERE id = ?",
+    );
+    const result = stmt.run(status, reviewedAt, reviewedBy || null, adminNotes || null, requestId);
+    return result.changes > 0;
+  } catch (error) {
+    console.error("Error updating feed request status:", error);
     throw error;
   }
 }

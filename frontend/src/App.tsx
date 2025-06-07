@@ -23,7 +23,7 @@ function App() {
           className={`tab ${activeTab === 'feeds' ? 'active' : ''}`}
           onClick={() => setActiveTab('feeds')}
         >
-          フィード管理
+          フィードリクエスト
         </button>
       </div>
 

@@ -119,73 +119,29 @@ app.get("/api/episodes", async (c) => {
   }
 });
 
-app.get("/api/feeds", async (c) => {
-  try {
-    const { getAllFeedsIncludingInactive } = await import("./services/database.js");
-    const feeds = await getAllFeedsIncludingInactive();
-    return c.json(feeds);
-  } catch (error) {
-    console.error("Error fetching feeds:", error);
-    return c.json({ error: "Failed to fetch feeds" }, 500);
-  }
-});
-
-app.post("/api/feeds", async (c) => {
+app.post("/api/feed-requests", async (c) => {
   try {
     const body = await c.req.json();
-    const { url } = body;
+    const { url, requestMessage } = body;
     
     if (!url || typeof url !== 'string') {
       return c.json({ error: "URL is required" }, 400);
     }
 
-    const { addNewFeedUrl } = await import("./scripts/fetch_and_generate.js");
-    await addNewFeedUrl(url);
-    return c.json({ success: true, message: "Feed added successfully" });
+    const { submitFeedRequest } = await import("./services/database.js");
+    const requestId = await submitFeedRequest({
+      url,
+      requestMessage,
+    });
+    
+    return c.json({ 
+      success: true, 
+      message: "Feed request submitted successfully",
+      requestId 
+    });
   } catch (error) {
-    console.error("Error adding feed:", error);
-    return c.json({ error: "Failed to add feed" }, 500);
-  }
-});
-
-app.delete("/api/feeds/:id", async (c) => {
-  try {
-    const feedId = c.req.param("id");
-    const { deleteFeed } = await import("./services/database.js");
-    const success = await deleteFeed(feedId);
-    
-    if (!success) {
-      return c.json({ error: "Feed not found" }, 404);
-    }
-    
-    return c.json({ success: true, message: "Feed deleted successfully" });
-  } catch (error) {
-    console.error("Error deleting feed:", error);
-    return c.json({ error: "Failed to delete feed" }, 500);
-  }
-});
-
-app.patch("/api/feeds/:id/toggle", async (c) => {
-  try {
-    const feedId = c.req.param("id");
-    const body = await c.req.json();
-    const { active } = body;
-    
-    if (typeof active !== 'boolean') {
-      return c.json({ error: "Active status must be boolean" }, 400);
-    }
-
-    const { toggleFeedActive } = await import("./services/database.js");
-    const success = await toggleFeedActive(feedId, active);
-    
-    if (!success) {
-      return c.json({ error: "Feed not found" }, 404);
-    }
-    
-    return c.json({ success: true, message: "Feed status updated successfully" });
-  } catch (error) {
-    console.error("Error toggling feed:", error);
-    return c.json({ error: "Failed to update feed status" }, 500);
+    console.error("Error submitting feed request:", error);
+    return c.json({ error: "Failed to submit feed request" }, 500);
   }
 });
 
