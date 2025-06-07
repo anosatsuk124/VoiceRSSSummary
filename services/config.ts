@@ -33,6 +33,11 @@ interface Config {
     password?: string;
   };
   
+  // Batch Processing Configuration
+  batch: {
+    disableInitialRun: boolean;
+  };
+  
   // File paths
   paths: {
     projectRoot: string;
@@ -90,6 +95,10 @@ function createConfig(): Config {
       port: parseInt(getOptionalEnv("ADMIN_PORT", "3001")),
       username: import.meta.env["ADMIN_USERNAME"],
       password: import.meta.env["ADMIN_PASSWORD"],
+    },
+    
+    batch: {
+      disableInitialRun: getOptionalEnv("DISABLE_INITIAL_BATCH", "false") === "true",
     },
     
     paths: {

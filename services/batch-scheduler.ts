@@ -1,4 +1,5 @@
 import { batchProcess } from "../scripts/fetch_and_generate.js";
+import { config } from "./config.js";
 
 interface BatchSchedulerState {
   enabled: boolean;
@@ -21,8 +22,15 @@ class BatchScheduler {
   private readonly SIX_HOURS_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
 
   constructor() {
-    // Start with initial delay and then schedule regular runs
-    this.scheduleInitialRun();
+    // Check if initial run is disabled via environment variable
+    if (config.batch.disableInitialRun) {
+      console.log("⏸️  Initial batch run disabled by configuration");
+      // Still schedule regular runs, just skip the initial one
+      this.scheduleRegularRuns();
+    } else {
+      // Start with initial delay and then schedule regular runs
+      this.scheduleInitialRun();
+    }
   }
 
   private scheduleInitialRun() {

@@ -55,6 +55,7 @@ The application uses `services/config.ts` for centralized configuration manageme
 - `ADMIN_PORT`: Admin panel port (default: 3001)
 - `ADMIN_USERNAME`: Admin panel username (optional, for basic auth)
 - `ADMIN_PASSWORD`: Admin panel password (optional, for basic auth)
+- `DISABLE_INITIAL_BATCH`: Disable initial batch process on startup (default: false)
 - Podcast metadata and other optional settings
 
 Configuration is validated on startup. See README.md for complete list.
