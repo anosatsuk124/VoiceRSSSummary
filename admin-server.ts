@@ -14,6 +14,7 @@ import {
   getFeedRequests,
   updateFeedRequestStatus,
 } from "./services/database.js";
+import { Database } from "bun:sqlite";
 import { batchProcess, addNewFeedUrl } from "./scripts/fetch_and_generate.js";
 import { batchScheduler } from "./services/batch-scheduler.js";
 
@@ -201,6 +202,114 @@ app.get("/api/admin/episodes/simple", async (c) => {
   } catch (error) {
     console.error("Error fetching simple episodes:", error);
     return c.json({ error: "Failed to fetch episodes" }, 500);
+  }
+});
+
+// Database diagnostic endpoint
+app.get("/api/admin/db-diagnostic", async (c) => {
+  try {
+    const db = new Database(config.paths.dbPath);
+    
+    // 1. Check episodes table
+    const episodeCount = db.prepare("SELECT COUNT(*) as count FROM episodes").get() as any;
+    
+    // 2. Check articles table
+    const articleCount = db.prepare("SELECT COUNT(*) as count FROM articles").get() as any;
+    
+    // 3. Check feeds table
+    const feedCount = db.prepare("SELECT COUNT(*) as count FROM feeds").get() as any;
+    const activeFeedCount = db.prepare("SELECT COUNT(*) as count FROM feeds WHERE active = 1").get() as any;
+    const inactiveFeedCount = db.prepare("SELECT COUNT(*) as count FROM feeds WHERE active = 0 OR active IS NULL").get() as any;
+    
+    // 4. Check orphaned episodes
+    const orphanedEpisodes = db.prepare(`
+      SELECT e.id, e.title, e.article_id 
+      FROM episodes e 
+      LEFT JOIN articles a ON e.article_id = a.id 
+      WHERE a.id IS NULL
+    `).all() as any[];
+    
+    // 5. Check orphaned articles
+    const orphanedArticles = db.prepare(`
+      SELECT a.id, a.title, a.feed_id 
+      FROM articles a 
+      LEFT JOIN feeds f ON a.feed_id = f.id 
+      WHERE f.id IS NULL
+    `).all() as any[];
+    
+    // 6. Check episodes with articles but feeds are inactive
+    const episodesInactiveFeeds = db.prepare(`
+      SELECT e.id, e.title, f.active, f.title as feed_title
+      FROM episodes e
+      JOIN articles a ON e.article_id = a.id
+      JOIN feeds f ON a.feed_id = f.id
+      WHERE f.active = 0 OR f.active IS NULL
+    `).all() as any[];
+    
+    // 7. Test the JOIN query
+    const joinResult = db.prepare(`
+      SELECT COUNT(*) as count
+      FROM episodes e
+      JOIN articles a ON e.article_id = a.id
+      JOIN feeds f ON a.feed_id = f.id
+      WHERE f.active = 1
+    `).get() as any;
+    
+    // 8. Sample feed details
+    const sampleFeeds = db.prepare(`
+      SELECT id, title, url, active, created_at
+      FROM feeds
+      ORDER BY created_at DESC
+      LIMIT 5
+    `).all() as any[];
+    
+    // 9. Sample episode-article-feed chain
+    const sampleChain = db.prepare(`
+      SELECT 
+        e.id as episode_id, e.title as episode_title,
+        a.id as article_id, a.title as article_title,
+        f.id as feed_id, f.title as feed_title, f.active
+      FROM episodes e
+      LEFT JOIN articles a ON e.article_id = a.id
+      LEFT JOIN feeds f ON a.feed_id = f.id
+      ORDER BY e.created_at DESC
+      LIMIT 5
+    `).all() as any[];
+    
+    db.close();
+    
+    const diagnosticResult = {
+      counts: {
+        episodes: episodeCount.count,
+        articles: articleCount.count,
+        feeds: feedCount.count,
+        activeFeeds: activeFeedCount.count,
+        inactiveFeeds: inactiveFeedCount.count,
+      },
+      orphaned: {
+        episodes: orphanedEpisodes.length,
+        episodeDetails: orphanedEpisodes.slice(0, 3),
+        articles: orphanedArticles.length,
+        articleDetails: orphanedArticles.slice(0, 3),
+      },
+      episodesFromInactiveFeeds: {
+        count: episodesInactiveFeeds.length,
+        details: episodesInactiveFeeds.slice(0, 3),
+      },
+      joinQuery: {
+        episodesWithActiveFeeds: joinResult.count,
+      },
+      samples: {
+        feeds: sampleFeeds,
+        episodeChain: sampleChain,
+      },
+      timestamp: new Date().toISOString(),
+    };
+    
+    return c.json(diagnosticResult);
+  } catch (error) {
+    console.error("Error running database diagnostic:", error);
+    return c.json({ error: "Failed to run database diagnostic", details: error.message }, 500);
   }
 });
 

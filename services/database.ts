@@ -4,59 +4,88 @@ import crypto from "crypto";
 import { config } from "./config.js";
 
 // Database integrity fixes function
-function performDatabaseIntegrityFixes(db: Database): void {
+export function performDatabaseIntegrityFixes(db: Database): void {
   console.log("🔧 Performing database integrity checks...");
-  
+
   try {
     // Fix 1: Set active flag to 1 for feeds where it's NULL
-    const nullActiveFeeds = db.prepare("UPDATE feeds SET active = 1 WHERE active IS NULL").run();
+    const nullActiveFeeds = db
+      .prepare("UPDATE feeds SET active = 1 WHERE active IS NULL")
+      .run();
     if (nullActiveFeeds.changes > 0) {
-      console.log(`✅ Fixed ${nullActiveFeeds.changes} feeds with NULL active flag`);
+      console.log(
+        `✅ Fixed ${nullActiveFeeds.changes} feeds with NULL active flag`,
+      );
     }
 
     // Fix 2: Fix orphaned articles (articles referencing non-existent feeds)
-    const orphanedArticles = db.prepare(`
+    const orphanedArticles = db
+      .prepare(
+        `
       SELECT a.id, a.link, a.title 
       FROM articles a 
       LEFT JOIN feeds f ON a.feed_id = f.id 
       WHERE f.id IS NULL
-    `).all() as any[];
+    `,
+      )
+      .all() as any[];
 
     if (orphanedArticles.length > 0) {
-      console.log(`🔍 Found ${orphanedArticles.length} orphaned articles, attempting to fix...`);
-      
+      console.log(
+        `🔍 Found ${orphanedArticles.length} orphaned articles, attempting to fix...`,
+      );
+
       for (const article of orphanedArticles) {
         // Try to match article to feed based on URL domain
         const articleDomain = extractDomain(article.link);
         if (articleDomain) {
-          const matchingFeed = db.prepare(`
+          const matchingFeed = db
+            .prepare(
+              `
             SELECT id FROM feeds 
             WHERE url LIKE ? OR url LIKE ? 
             ORDER BY created_at DESC 
             LIMIT 1
-          `).get(`%${articleDomain}%`, `%${articleDomain.replace('www.', '')}%`) as any;
+          `,
+            )
+            .get(
+              `%${articleDomain}%`,
+              `%${articleDomain.replace("www.", "")}%`,
+            ) as any;
 
           if (matchingFeed) {
-            db.prepare("UPDATE articles SET feed_id = ? WHERE id = ?")
-              .run(matchingFeed.id, article.id);
-            console.log(`✅ Fixed article "${article.title}" -> feed ${matchingFeed.id}`);
+            db.prepare("UPDATE articles SET feed_id = ? WHERE id = ?").run(
+              matchingFeed.id,
+              article.id,
+            );
+            console.log(
+              `✅ Fixed article "${article.title}" -> feed ${matchingFeed.id}`,
+            );
           } else {
-            console.log(`⚠️  Could not find matching feed for article: ${article.title} (${articleDomain})`);
+            console.log(
+              `⚠️  Could not find matching feed for article: ${article.title} (${articleDomain})`,
+            );
           }
         }
       }
     }
 
     // Fix 3: Ensure all episodes have valid article references
-    const orphanedEpisodes = db.prepare(`
+    const orphanedEpisodes = db
+      .prepare(
+        `
       SELECT e.id, e.title, e.article_id 
       FROM episodes e 
       LEFT JOIN articles a ON e.article_id = a.id 
       WHERE a.id IS NULL
-    `).all() as any[];
+    `,
+      )
+      .all() as any[];
 
     if (orphanedEpisodes.length > 0) {
-      console.log(`⚠️  Found ${orphanedEpisodes.length} episodes with invalid article references`);
+      console.log(
+        `⚠️  Found ${orphanedEpisodes.length} episodes with invalid article references`,
+      );
       // We could delete these or try to fix them, but for now just log
     }
 
@@ -89,7 +118,7 @@ function initializeDatabase(): Database {
   }
 
   const db = new Database(config.paths.dbPath);
-  
+
   // Enable WAL mode for better concurrent access
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA synchronous = NORMAL;");
@@ -259,6 +288,17 @@ export async function saveFeed(
       createdAt,
       feed.active !== undefined ? (feed.active ? 1 : 0) : 1, // Default to active=1 if not specified
     );
+
+    try {
+      performDatabaseIntegrityFixes(db);
+      console.log(`Feed saved: ${feed.url}`);
+    } catch (error) {
+      console.error(
+        "Error performing integrity fixes after saving feed:",
+        error,
+      );
+    }
+
     return id;
   } catch (error) {
     console.error("Error saving feed:", error);
@@ -336,7 +376,9 @@ export async function fetchActiveFeeds(): Promise<Feed[]> {
 }
 
 // Get episodes with feed information for enhanced display
-export async function fetchEpisodesWithFeedInfo(): Promise<EpisodeWithFeedInfo[]> {
+export async function fetchEpisodesWithFeedInfo(): Promise<
+  EpisodeWithFeedInfo[]
+> {
   try {
     const stmt = db.prepare(`
       SELECT 
@@ -386,7 +428,9 @@ export async function fetchEpisodesWithFeedInfo(): Promise<EpisodeWithFeedInfo[]
 }
 
 // Get episodes by feed ID
-export async function fetchEpisodesByFeedId(feedId: string): Promise<EpisodeWithFeedInfo[]> {
+export async function fetchEpisodesByFeedId(
+  feedId: string,
+): Promise<EpisodeWithFeedInfo[]> {
   try {
     const stmt = db.prepare(`
       SELECT 
@@ -436,7 +480,9 @@ export async function fetchEpisodesByFeedId(feedId: string): Promise<EpisodeWith
 }
 
 // Get single episode with source information
-export async function fetchEpisodeWithSourceInfo(episodeId: string): Promise<EpisodeWithFeedInfo | null> {
+export async function fetchEpisodeWithSourceInfo(
+  episodeId: string,
+): Promise<EpisodeWithFeedInfo | null> {
   try {
     const stmt = db.prepare(`
       SELECT 
@@ -487,9 +533,7 @@ export async function fetchEpisodeWithSourceInfo(episodeId: string): Promise<Epi
 
 export async function getAllFeedsIncludingInactive(): Promise<Feed[]> {
   try {
-    const stmt = db.prepare(
-      "SELECT * FROM feeds ORDER BY created_at DESC",
-    );
+    const stmt = db.prepare("SELECT * FROM feeds ORDER BY created_at DESC");
     const rows = stmt.all() as any[];
 
     return rows.map((row) => ({
@@ -511,7 +555,7 @@ export async function deleteFeed(feedId: string): Promise<boolean> {
   try {
     // Start transaction
     db.exec("BEGIN TRANSACTION");
-    
+
     // Delete all episodes for articles belonging to this feed
     const deleteEpisodesStmt = db.prepare(`
       DELETE FROM episodes 
@@ -520,17 +564,19 @@ export async function deleteFeed(feedId: string): Promise<boolean> {
       )
     `);
     deleteEpisodesStmt.run(feedId);
-    
+
     // Delete all articles for this feed
-    const deleteArticlesStmt = db.prepare("DELETE FROM articles WHERE feed_id = ?");
+    const deleteArticlesStmt = db.prepare(
+      "DELETE FROM articles WHERE feed_id = ?",
+    );
     deleteArticlesStmt.run(feedId);
-    
+
     // Delete the feed itself
     const deleteFeedStmt = db.prepare("DELETE FROM feeds WHERE id = ?");
     const result = deleteFeedStmt.run(feedId);
-    
+
     db.exec("COMMIT");
-    
+
     return result.changes > 0;
   } catch (error) {
     db.exec("ROLLBACK");
@@ -539,7 +585,10 @@ export async function deleteFeed(feedId: string): Promise<boolean> {
   }
 }
 
-export async function toggleFeedActive(feedId: string, active: boolean): Promise<boolean> {
+export async function toggleFeedActive(
+  feedId: string,
+  active: boolean,
+): Promise<boolean> {
   try {
     const stmt = db.prepare("UPDATE feeds SET active = ? WHERE id = ?");
     const result = stmt.run(active ? 1 : 0, feedId);
@@ -816,7 +865,7 @@ export interface TTSQueueItem {
   retryCount: number;
   createdAt: string;
   lastAttemptedAt?: string;
-  status: 'pending' | 'processing' | 'failed';
+  status: "pending" | "processing" | "failed";
 }
 
 export async function addToQueue(
@@ -840,7 +889,9 @@ export async function addToQueue(
   }
 }
 
-export async function getQueueItems(limit: number = 10): Promise<TTSQueueItem[]> {
+export async function getQueueItems(
+  limit: number = 10,
+): Promise<TTSQueueItem[]> {
   try {
     const stmt = db.prepare(`
       SELECT * FROM tts_queue
@@ -867,7 +918,7 @@ export async function getQueueItems(limit: number = 10): Promise<TTSQueueItem[]>
 
 export async function updateQueueItemStatus(
   queueId: string,
-  status: 'pending' | 'processing' | 'failed',
+  status: "pending" | "processing" | "failed",
   lastAttemptedAt?: string,
 ): Promise<void> {
   try {
@@ -897,7 +948,7 @@ export interface FeedRequest {
   url: string;
   requestedBy?: string;
   requestMessage?: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: "pending" | "approved" | "rejected";
   createdAt: string;
   reviewedAt?: string;
   reviewedBy?: string;
@@ -905,7 +956,7 @@ export interface FeedRequest {
 }
 
 export async function submitFeedRequest(
-  request: Omit<FeedRequest, "id" | "createdAt" | "status">
+  request: Omit<FeedRequest, "id" | "createdAt" | "status">,
 ): Promise<string> {
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
@@ -914,7 +965,13 @@ export async function submitFeedRequest(
     const stmt = db.prepare(
       "INSERT INTO feed_requests (id, url, requested_by, request_message, status, created_at) VALUES (?, ?, ?, ?, 'pending', ?)",
     );
-    stmt.run(id, request.url, request.requestedBy || null, request.requestMessage || null, createdAt);
+    stmt.run(
+      id,
+      request.url,
+      request.requestedBy || null,
+      request.requestMessage || null,
+      createdAt,
+    );
     console.log(`Feed request submitted: ${request.url}`);
     return id;
   } catch (error) {
@@ -928,7 +985,7 @@ export async function getFeedRequests(status?: string): Promise<FeedRequest[]> {
     const sql = status
       ? "SELECT * FROM feed_requests WHERE status = ? ORDER BY created_at DESC"
       : "SELECT * FROM feed_requests ORDER BY created_at DESC";
-    
+
     const stmt = db.prepare(sql);
     const rows = status ? stmt.all(status) : stmt.all();
 
@@ -951,7 +1008,7 @@ export async function getFeedRequests(status?: string): Promise<FeedRequest[]> {
 
 export async function updateFeedRequestStatus(
   requestId: string,
-  status: 'approved' | 'rejected',
+  status: "approved" | "rejected",
   reviewedBy?: string,
   adminNotes?: string,
 ): Promise<boolean> {
@@ -960,7 +1017,13 @@ export async function updateFeedRequestStatus(
     const stmt = db.prepare(
       "UPDATE feed_requests SET status = ?, reviewed_at = ?, reviewed_by = ?, admin_notes = ? WHERE id = ?",
     );
-    const result = stmt.run(status, reviewedAt, reviewedBy || null, adminNotes || null, requestId);
+    const result = stmt.run(
+      status,
+      reviewedAt,
+      reviewedBy || null,
+      adminNotes || null,
+      requestId,
+    );
     return result.changes > 0;
   } catch (error) {
     console.error("Error updating feed request status:", error);

@@ -1,6 +1,10 @@
 import { promises as fs } from "fs";
 import { dirname } from "path";
-import { Episode, fetchAllEpisodes } from "./database.js";
+import {
+  Episode,
+  fetchAllEpisodes,
+  performDatabaseIntegrityFixes,
+} from "./database.js";
 import path from "node:path";
 import fsSync from "node:fs";
 import { config } from "./config.js";
@@ -17,17 +21,20 @@ function escapeXml(text: string): string {
 function createItemXml(episode: Episode): string {
   const fileUrl = `${config.podcast.baseUrl}/podcast_audio/${path.basename(episode.audioPath)}`;
   const pubDate = new Date(episode.createdAt).toUTCString();
-  
+
   let fileSize = 0;
   try {
-    const audioPath = path.join(config.paths.podcastAudioDir, episode.audioPath);
+    const audioPath = path.join(
+      config.paths.podcastAudioDir,
+      episode.audioPath,
+    );
     if (fsSync.existsSync(audioPath)) {
       fileSize = fsSync.statSync(audioPath).size;
     }
   } catch (error) {
     console.warn(`Could not get file size for ${episode.audioPath}:`, error);
   }
-  
+
   return `
     <item>
       <title><![CDATA[${escapeXml(episode.title)}]]></title>
@@ -45,11 +52,14 @@ function createItemXml(episode: Episode): string {
 export async function updatePodcastRSS(): Promise<void> {
   try {
     const episodes: Episode[] = await fetchAllEpisodes();
-    
+
     // Filter episodes to only include those with valid audio files
-    const validEpisodes = episodes.filter(episode => {
+    const validEpisodes = episodes.filter((episode) => {
       try {
-        const audioPath = path.join(config.paths.podcastAudioDir, episode.audioPath);
+        const audioPath = path.join(
+          config.paths.podcastAudioDir,
+          episode.audioPath,
+        );
         return fsSync.existsSync(audioPath);
       } catch (error) {
         console.warn(`Audio file not found for episode: ${episode.title}`);
@@ -57,7 +67,9 @@ export async function updatePodcastRSS(): Promise<void> {
       }
     });
 
-    console.log(`Found ${episodes.length} episodes, ${validEpisodes.length} with valid audio files`);
+    console.log(
+      `Found ${episodes.length} episodes, ${validEpisodes.length} with valid audio files`,
+    );
 
     const lastBuildDate = new Date().toUTCString();
     const itemsXml = validEpisodes.map(createItemXml).join("\n");
@@ -81,8 +93,10 @@ export async function updatePodcastRSS(): Promise<void> {
     // Ensure directory exists
     await fs.mkdir(dirname(outputPath), { recursive: true });
     await fs.writeFile(outputPath, rssXml);
-    
-    console.log(`RSS feed updated with ${validEpisodes.length} episodes (audio files verified)`);
+
+    console.log(
+      `RSS feed updated with ${validEpisodes.length} episodes (audio files verified)`,
+    );
   } catch (error) {
     console.error("Error updating podcast RSS:", error);
     throw error;
