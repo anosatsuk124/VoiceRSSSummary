@@ -7,6 +7,7 @@ docker run \
 	--volume "$(pwd)/public:/app/public" \
 	--volume "$(pwd)/data:/app/data" \
 	--publish 3000:3000 \
+	--publish 3001:3001 \
 	--name voice-rss-summary \
 	-d \
 	--restart always \

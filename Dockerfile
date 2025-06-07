@@ -14,9 +14,10 @@ COPY . .
 RUN bun install
 
 RUN bun run build:frontend
+RUN bun run build:admin
 
-# Expose the port your app runs on
-EXPOSE 3000
+# Expose the ports your app runs on
+EXPOSE 3000 3001
 
-# Command to run the application
-CMD ["bun", "run", "/app/server.ts"]
+# Start both servers
+CMD ["sh", "-c", "bun run /app/server.ts & bun run /app/admin-server.ts & wait"]
