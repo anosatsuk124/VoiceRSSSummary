@@ -2,11 +2,11 @@ import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import path from "path";
 import { config, validateConfig } from "./services/config.js";
-import { 
-  fetchAllEpisodes, 
+import {
+  fetchAllEpisodes,
   fetchEpisodesWithArticles,
   getAllFeeds,
-  getFeedByUrl
+  getFeedByUrl,
 } from "./services/database.js";
 import { batchProcess, addNewFeedUrl } from "./scripts/fetch_and_generate.js";
 
@@ -35,30 +35,34 @@ app.get("/api/feeds", async (c) => {
 app.post("/api/feeds", async (c) => {
   try {
     const { feedUrl } = await c.req.json<{ feedUrl: string }>();
-    
-    if (!feedUrl || typeof feedUrl !== "string" || !feedUrl.startsWith('http')) {
+
+    if (
+      !feedUrl ||
+      typeof feedUrl !== "string" ||
+      !feedUrl.startsWith("http")
+    ) {
       return c.json({ error: "Valid feed URL is required" }, 400);
     }
-    
+
     console.log("➕ Adding new feed URL:", feedUrl);
-    
+
     // Check if feed already exists
     const existingFeed = await getFeedByUrl(feedUrl);
     if (existingFeed) {
-      return c.json({ 
-        result: "EXISTS", 
+      return c.json({
+        result: "EXISTS",
         message: "Feed URL already exists",
-        feed: existingFeed 
+        feed: existingFeed,
       });
     }
-    
+
     // Add new feed
     await addNewFeedUrl(feedUrl);
-    
-    return c.json({ 
-      result: "CREATED", 
+
+    return c.json({
+      result: "CREATED",
       message: "Feed URL added successfully",
-      feedUrl 
+      feedUrl,
     });
   } catch (error) {
     console.error("Error adding feed:", error);
@@ -89,18 +93,18 @@ app.get("/api/episodes/simple", async (c) => {
 app.post("/api/episodes/:id/regenerate", async (c) => {
   try {
     const id = c.req.param("id");
-    
+
     if (!id || id.trim() === "") {
       return c.json({ error: "Episode ID is required" }, 400);
     }
-    
+
     console.log("🔄 Regeneration requested for episode ID:", id);
     // TODO: Implement regeneration logic
-    return c.json({ 
-      result: "PENDING", 
+    return c.json({
+      result: "PENDING",
       episodeId: id,
       status: "pending",
-      message: "Regeneration feature will be implemented in a future update"
+      message: "Regeneration feature will be implemented in a future update",
     });
   } catch (error) {
     console.error("Error requesting regeneration:", error);
@@ -113,14 +117,14 @@ app.get("/api/stats", async (c) => {
   try {
     const feeds = await getAllFeeds();
     const episodes = await fetchAllEpisodes();
-    
+
     const stats = {
       totalFeeds: feeds.length,
-      activeFeeds: feeds.filter(f => f.active).length,
+      activeFeeds: feeds.filter((f) => f.active).length,
       totalEpisodes: episodes.length,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: new Date().toISOString(),
     };
-    
+
     return c.json(stats);
   } catch (error) {
     console.error("Error fetching stats:", error);
@@ -131,16 +135,16 @@ app.get("/api/stats", async (c) => {
 app.post("/api/batch/trigger", async (c) => {
   try {
     console.log("🚀 Manual batch process triggered via API");
-    
+
     // Run batch process in background
-    runBatchProcess().catch(error => {
+    runBatchProcess().catch((error) => {
       console.error("❌ Manual batch process failed:", error);
     });
-    
-    return c.json({ 
+
+    return c.json({
       result: "TRIGGERED",
       message: "Batch process started in background",
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     console.error("Error triggering batch process:", error);
@@ -155,7 +159,7 @@ app.get("/assets/*", async (c) => {
   try {
     const filePath = path.join(config.paths.frontendBuildDir, c.req.path);
     const file = Bun.file(filePath);
-    
+
     if (await file.exists()) {
       const contentType = filePath.endsWith(".js")
         ? "application/javascript"
@@ -175,15 +179,18 @@ app.get("/assets/*", async (c) => {
 app.get("/podcast_audio/*", async (c) => {
   try {
     const audioFileName = c.req.path.substring("/podcast_audio/".length);
-    
+
     // Basic security check
     if (audioFileName.includes("..") || audioFileName.includes("/")) {
       return c.notFound();
     }
-    
-    const audioFilePath = path.join(config.paths.podcastAudioDir, audioFileName);
+
+    const audioFilePath = path.join(
+      config.paths.podcastAudioDir,
+      audioFileName,
+    );
     const file = Bun.file(audioFilePath);
-    
+
     if (await file.exists()) {
       const blob = await file.arrayBuffer();
       return c.body(blob, 200, { "Content-Type": "audio/mpeg" });
@@ -199,7 +206,7 @@ app.get("/podcast.xml", async (c) => {
   try {
     const filePath = path.join(config.paths.publicDir, "podcast.xml");
     const file = Bun.file(filePath);
-    
+
     if (await file.exists()) {
       const blob = await file.arrayBuffer();
       return c.body(blob, 200, {
@@ -207,7 +214,7 @@ app.get("/podcast.xml", async (c) => {
         "Cache-Control": "public, max-age=3600", // Cache for 1 hour
       });
     }
-    
+
     console.warn("podcast.xml not found");
     return c.notFound();
   } catch (error) {
@@ -218,10 +225,13 @@ app.get("/podcast.xml", async (c) => {
 
 // Legacy endpoint - redirect to new one
 app.post("/api/add-feed", async (c) => {
-  return c.json({ 
-    error: "This endpoint is deprecated. Use POST /api/feeds instead.",
-    newEndpoint: "POST /api/feeds"
-  }, 410);
+  return c.json(
+    {
+      error: "This endpoint is deprecated. Use POST /api/feeds instead.",
+      newEndpoint: "POST /api/feeds",
+    },
+    410,
+  );
 });
 
 // Frontend fallback routes
@@ -229,12 +239,12 @@ async function serveIndex(c: any) {
   try {
     const indexPath = path.join(config.paths.frontendBuildDir, "index.html");
     const file = Bun.file(indexPath);
-    
+
     if (await file.exists()) {
       const blob = await file.arrayBuffer();
       return c.body(blob, 200, { "Content-Type": "text/html; charset=utf-8" });
     }
-    
+
     console.error(`index.html not found at ${indexPath}`);
     return c.text("Frontend not built. Run 'bun run build:frontend'", 404);
   } catch (error) {
@@ -265,9 +275,9 @@ function scheduleFirstBatchProcess() {
 
 function scheduleSixHourlyBatchProcess() {
   const SIX_HOURS_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
-  
+
   console.log(
-    `🕕 Next batch process scheduled in 6 hours (${new Date(Date.now() + SIX_HOURS_MS).toLocaleString()})`
+    `🕕 Next batch process scheduled in 6 hours (${new Date(Date.now() + SIX_HOURS_MS).toLocaleString()})`,
   );
 
   setTimeout(async () => {
@@ -285,7 +295,7 @@ function scheduleSixHourlyBatchProcess() {
 
 async function runBatchProcess(): Promise<void> {
   try {
-    await batchProcess();
+    Bun.spawn(["bun", "run", "scripts/fetch_and_generate.ts"]);
   } catch (error) {
     console.error("Batch process failed:", error);
     throw error;
@@ -302,7 +312,7 @@ serve(
     console.log(`🌟 Server is running on http://localhost:${info.port}`);
     console.log(`📡 Using configuration from: ${config.paths.projectRoot}`);
     console.log(`🗄️  Database: ${config.paths.dbPath}`);
-    
+
     // Schedule batch processes
     scheduleFirstBatchProcess();
     scheduleSixHourlyBatchProcess();
