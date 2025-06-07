@@ -183,6 +183,71 @@ export async function getAllFeeds(): Promise<Feed[]> {
   }
 }
 
+export async function getAllFeedsIncludingInactive(): Promise<Feed[]> {
+  try {
+    const stmt = db.prepare(
+      "SELECT * FROM feeds ORDER BY created_at DESC",
+    );
+    const rows = stmt.all() as any[];
+
+    return rows.map((row) => ({
+      id: row.id,
+      url: row.url,
+      title: row.title,
+      description: row.description,
+      lastUpdated: row.last_updated,
+      createdAt: row.created_at,
+      active: Boolean(row.active),
+    }));
+  } catch (error) {
+    console.error("Error getting all feeds including inactive:", error);
+    throw error;
+  }
+}
+
+export async function deleteFeed(feedId: string): Promise<boolean> {
+  try {
+    // Start transaction
+    db.exec("BEGIN TRANSACTION");
+    
+    // Delete all episodes for articles belonging to this feed
+    const deleteEpisodesStmt = db.prepare(`
+      DELETE FROM episodes 
+      WHERE article_id IN (
+        SELECT id FROM articles WHERE feed_id = ?
+      )
+    `);
+    deleteEpisodesStmt.run(feedId);
+    
+    // Delete all articles for this feed
+    const deleteArticlesStmt = db.prepare("DELETE FROM articles WHERE feed_id = ?");
+    deleteArticlesStmt.run(feedId);
+    
+    // Delete the feed itself
+    const deleteFeedStmt = db.prepare("DELETE FROM feeds WHERE id = ?");
+    const result = deleteFeedStmt.run(feedId);
+    
+    db.exec("COMMIT");
+    
+    return result.changes > 0;
+  } catch (error) {
+    db.exec("ROLLBACK");
+    console.error("Error deleting feed:", error);
+    throw error;
+  }
+}
+
+export async function toggleFeedActive(feedId: string, active: boolean): Promise<boolean> {
+  try {
+    const stmt = db.prepare("UPDATE feeds SET active = ? WHERE id = ?");
+    const result = stmt.run(active ? 1 : 0, feedId);
+    return result.changes > 0;
+  } catch (error) {
+    console.error("Error toggling feed active status:", error);
+    throw error;
+  }
+}
+
 // Article management functions
 export async function saveArticle(
   article: Omit<Article, "id" | "discoveredAt">,

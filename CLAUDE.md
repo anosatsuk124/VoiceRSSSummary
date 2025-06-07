@@ -6,8 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Install dependencies**: `bun install`
 - **Build frontend**: `bun run build:frontend`
+- **Build admin panel**: `bun run build:admin`
 - **Start server**: `bun run start` or `bun run server.ts`
+- **Start admin panel**: `bun run admin` or `bun run admin-server.ts`
 - **Frontend development**: `bun run dev:frontend`
+- **Admin panel development**: `bun run dev:admin`
 - **Manual batch process**: `bun run scripts/fetch_and_generate.ts`
 - **Type checking**: `bunx tsc --noEmit`
 
@@ -17,11 +20,12 @@ This is a RSS-to-podcast automation system built with Bun runtime, Hono web fram
 
 ### Core Components
 
-- **server.ts**: Main Hono web server serving both API endpoints and static frontend files
+- **server.ts**: Main Hono web server serving UI and static content (port 3000)
+- **admin-server.ts**: Admin panel server for management functions (port 3001 by default)
 - **scripts/fetch_and_generate.ts**: Batch processing script that fetches RSS feeds, generates summaries, and creates audio files
 - **services/**: Core business logic modules:
   - `config.ts`: Centralized configuration management with validation
-  - `database.ts`: SQLite operations for episodes and feed tracking
+  - `database.ts`: SQLite operations for episodes and feed tracking (includes feed deletion)
   - `llm.ts`: OpenAI integration for content generation and feed classification
   - `tts.ts`: Text-to-speech via VOICEVOX API
   - `podcast.ts`: RSS feed generation
@@ -48,16 +52,26 @@ The application uses `services/config.ts` for centralized configuration manageme
 - `OPENAI_API_KEY`: OpenAI API key (required)
 - `VOICEVOX_HOST`: VOICEVOX server URL (default: http://localhost:50021)
 - `VOICEVOX_STYLE_ID`: Voice style ID (default: 0)
+- `ADMIN_PORT`: Admin panel port (default: 3001)
+- `ADMIN_USERNAME`: Admin panel username (optional, for basic auth)
+- `ADMIN_PASSWORD`: Admin panel password (optional, for basic auth)
 - Podcast metadata and other optional settings
 
 Configuration is validated on startup. See README.md for complete list.
 
 ### Deployment
 
-The application runs as a single server process on port 3000, automatically executing batch processing on startup and daily at midnight.
+The application runs as two separate servers:
+- **Main server (port 3000)**: Serves the web UI, podcast.xml, and static files
+- **Admin server (port 3001)**: Provides management interface with feed CRUD operations and environment variable management
+
+Both servers execute batch processing on startup and at regular intervals.
 
 ### Recent Improvements
 
+- **Admin Panel**: Separate admin server with feed management, deletion, and environment variable configuration
+- **Feed Management**: Added feed deletion functionality and active/inactive toggling
+- **API Separation**: Moved all management APIs to admin server, keeping main server focused on content delivery
 - **ES Module Compatibility**: Fixed all ES module issues and removed deprecated `__dirname` usage
 - **Centralized Configuration**: Added `services/config.ts` for type-safe configuration management
 - **Enhanced Error Handling**: Improved error handling and validation throughout the codebase

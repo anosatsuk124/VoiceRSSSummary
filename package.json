@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "scripts": {
     "start": "bun run build:frontend && bun run server.ts",
+    "admin": "bun run build:admin && bun run admin-server.ts",
     "build:frontend": "cd frontend && bun vite build",
-    "dev:frontend": "cd frontend && bun vite dev"
+    "build:admin": "cd admin-panel && bun install && bun run build",
+    "dev:frontend": "cd frontend && bun vite dev",
+    "dev:admin": "cd admin-panel && bun vite dev"
   },
   "dependencies": {
     "@aws-sdk/client-polly": "^3.823.0",

@@ -26,6 +26,13 @@ interface Config {
     baseUrl: string;
   };
   
+  // Admin Panel Configuration
+  admin: {
+    port: number;
+    username?: string;
+    password?: string;
+  };
+  
   // File paths
   paths: {
     projectRoot: string;
@@ -34,6 +41,7 @@ interface Config {
     publicDir: string;
     podcastAudioDir: string;
     frontendBuildDir: string;
+    adminBuildDir: string;
     feedUrlsFile: string;
   };
 }
@@ -78,6 +86,12 @@ function createConfig(): Config {
       baseUrl: getOptionalEnv("PODCAST_BASE_URL", "https://your-domain.com"),
     },
     
+    admin: {
+      port: parseInt(getOptionalEnv("ADMIN_PORT", "3001")),
+      username: import.meta.env["ADMIN_USERNAME"],
+      password: import.meta.env["ADMIN_PASSWORD"],
+    },
+    
     paths: {
       projectRoot,
       dataDir,
@@ -85,6 +99,7 @@ function createConfig(): Config {
       publicDir,
       podcastAudioDir: path.join(publicDir, "podcast_audio"),
       frontendBuildDir: path.join(projectRoot, "frontend", "dist"),
+      adminBuildDir: path.join(projectRoot, "admin-panel", "dist"),
       feedUrlsFile: path.join(projectRoot, getOptionalEnv("FEED_URLS_FILE", "feed_urls.txt")),
     },
   };

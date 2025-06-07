@@ -2,13 +2,7 @@ import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import path from "path";
 import { config, validateConfig } from "./services/config.js";
-import { 
-  fetchAllEpisodes, 
-  fetchEpisodesWithArticles,
-  getAllFeeds,
-  getFeedByUrl
-} from "./services/database.js";
-import { batchProcess, addNewFeedUrl } from "./scripts/fetch_and_generate.js";
+import { batchProcess } from "./scripts/fetch_and_generate.js";
 
 // Validate configuration on startup
 try {
@@ -20,133 +14,6 @@ try {
 }
 
 const app = new Hono();
-
-// API routes
-app.get("/api/feeds", async (c) => {
-  try {
-    const feeds = await getAllFeeds();
-    return c.json(feeds);
-  } catch (error) {
-    console.error("Error fetching feeds:", error);
-    return c.json({ error: "Failed to fetch feeds" }, 500);
-  }
-});
-
-app.post("/api/feeds", async (c) => {
-  try {
-    const { feedUrl } = await c.req.json<{ feedUrl: string }>();
-    
-    if (!feedUrl || typeof feedUrl !== "string" || !feedUrl.startsWith('http')) {
-      return c.json({ error: "Valid feed URL is required" }, 400);
-    }
-    
-    console.log("➕ Adding new feed URL:", feedUrl);
-    
-    // Check if feed already exists
-    const existingFeed = await getFeedByUrl(feedUrl);
-    if (existingFeed) {
-      return c.json({ 
-        result: "EXISTS", 
-        message: "Feed URL already exists",
-        feed: existingFeed 
-      });
-    }
-    
-    // Add new feed
-    await addNewFeedUrl(feedUrl);
-    
-    return c.json({ 
-      result: "CREATED", 
-      message: "Feed URL added successfully",
-      feedUrl 
-    });
-  } catch (error) {
-    console.error("Error adding feed:", error);
-    return c.json({ error: "Failed to add feed" }, 500);
-  }
-});
-
-app.get("/api/episodes", async (c) => {
-  try {
-    const episodes = await fetchEpisodesWithArticles();
-    return c.json(episodes);
-  } catch (error) {
-    console.error("Error fetching episodes:", error);
-    return c.json({ error: "Failed to fetch episodes" }, 500);
-  }
-});
-
-app.get("/api/episodes/simple", async (c) => {
-  try {
-    const episodes = await fetchAllEpisodes();
-    return c.json(episodes);
-  } catch (error) {
-    console.error("Error fetching simple episodes:", error);
-    return c.json({ error: "Failed to fetch episodes" }, 500);
-  }
-});
-
-app.post("/api/episodes/:id/regenerate", async (c) => {
-  try {
-    const id = c.req.param("id");
-    
-    if (!id || id.trim() === "") {
-      return c.json({ error: "Episode ID is required" }, 400);
-    }
-    
-    console.log("🔄 Regeneration requested for episode ID:", id);
-    // TODO: Implement regeneration logic
-    return c.json({ 
-      result: "PENDING", 
-      episodeId: id,
-      status: "pending",
-      message: "Regeneration feature will be implemented in a future update"
-    });
-  } catch (error) {
-    console.error("Error requesting regeneration:", error);
-    return c.json({ error: "Failed to request regeneration" }, 500);
-  }
-});
-
-// New API endpoints for enhanced functionality
-app.get("/api/stats", async (c) => {
-  try {
-    const feeds = await getAllFeeds();
-    const episodes = await fetchAllEpisodes();
-    
-    const stats = {
-      totalFeeds: feeds.length,
-      activeFeeds: feeds.filter(f => f.active).length,
-      totalEpisodes: episodes.length,
-      lastUpdated: new Date().toISOString()
-    };
-    
-    return c.json(stats);
-  } catch (error) {
-    console.error("Error fetching stats:", error);
-    return c.json({ error: "Failed to fetch statistics" }, 500);
-  }
-});
-
-app.post("/api/batch/trigger", async (c) => {
-  try {
-    console.log("🚀 Manual batch process triggered via API");
-    
-    // Run batch process in background
-    runBatchProcess().catch(error => {
-      console.error("❌ Manual batch process failed:", error);
-    });
-    
-    return c.json({ 
-      result: "TRIGGERED",
-      message: "Batch process started in background",
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error("Error triggering batch process:", error);
-    return c.json({ error: "Failed to trigger batch process" }, 500);
-  }
-});
 
 // 静的ファイルの処理
 
@@ -216,13 +83,6 @@ app.get("/podcast.xml", async (c) => {
   }
 });
 
-// Legacy endpoint - redirect to new one
-app.post("/api/add-feed", async (c) => {
-  return c.json({ 
-    error: "This endpoint is deprecated. Use POST /api/feeds instead.",
-    newEndpoint: "POST /api/feeds"
-  }, 410);
-});
 
 // Frontend fallback routes
 async function serveIndex(c: any) {
