@@ -60,11 +60,23 @@ function initializeDatabase(): Database {
     PRIMARY KEY(feed_url, item_id)
   );
 
+  CREATE TABLE IF NOT EXISTS tts_queue (
+    id TEXT PRIMARY KEY,
+    item_id TEXT NOT NULL,
+    script_text TEXT NOT NULL,
+    retry_count INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    last_attempted_at TEXT,
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'failed'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_articles_feed_id ON articles(feed_id);
   CREATE INDEX IF NOT EXISTS idx_articles_pub_date ON articles(pub_date);
   CREATE INDEX IF NOT EXISTS idx_articles_processed ON articles(processed);
   CREATE INDEX IF NOT EXISTS idx_episodes_article_id ON episodes(article_id);
-  CREATE INDEX IF NOT EXISTS idx_feeds_active ON feeds(active);`);
+  CREATE INDEX IF NOT EXISTS idx_feeds_active ON feeds(active);
+  CREATE INDEX IF NOT EXISTS idx_tts_queue_status ON tts_queue(status);
+  CREATE INDEX IF NOT EXISTS idx_tts_queue_created_at ON tts_queue(created_at);`);
 
   return db;
 }
@@ -502,6 +514,89 @@ export async function fetchEpisodesWithArticles(): Promise<
     }));
   } catch (error) {
     console.error("Error fetching episodes with articles:", error);
+    throw error;
+  }
+}
+
+// TTS Queue management functions
+export interface TTSQueueItem {
+  id: string;
+  itemId: string;
+  scriptText: string;
+  retryCount: number;
+  createdAt: string;
+  lastAttemptedAt?: string;
+  status: 'pending' | 'processing' | 'failed';
+}
+
+export async function addToQueue(
+  itemId: string,
+  scriptText: string,
+  retryCount: number = 0,
+): Promise<string> {
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+
+  try {
+    const stmt = db.prepare(
+      "INSERT INTO tts_queue (id, item_id, script_text, retry_count, created_at, status) VALUES (?, ?, ?, ?, ?, 'pending')",
+    );
+    stmt.run(id, itemId, scriptText, retryCount, createdAt);
+    console.log(`TTS queue に追加: ${itemId} (試行回数: ${retryCount})`);
+    return id;
+  } catch (error) {
+    console.error("Error adding to TTS queue:", error);
+    throw error;
+  }
+}
+
+export async function getQueueItems(limit: number = 10): Promise<TTSQueueItem[]> {
+  try {
+    const stmt = db.prepare(`
+      SELECT * FROM tts_queue
+      WHERE status = 'pending'
+      ORDER BY created_at ASC
+      LIMIT ?
+    `);
+    const rows = stmt.all(limit) as any[];
+
+    return rows.map((row) => ({
+      id: row.id,
+      itemId: row.item_id,
+      scriptText: row.script_text,
+      retryCount: row.retry_count,
+      createdAt: row.created_at,
+      lastAttemptedAt: row.last_attempted_at,
+      status: row.status,
+    }));
+  } catch (error) {
+    console.error("Error getting queue items:", error);
+    throw error;
+  }
+}
+
+export async function updateQueueItemStatus(
+  queueId: string,
+  status: 'pending' | 'processing' | 'failed',
+  lastAttemptedAt?: string,
+): Promise<void> {
+  try {
+    const stmt = db.prepare(
+      "UPDATE tts_queue SET status = ?, last_attempted_at = ? WHERE id = ?",
+    );
+    stmt.run(status, lastAttemptedAt || new Date().toISOString(), queueId);
+  } catch (error) {
+    console.error("Error updating queue item status:", error);
+    throw error;
+  }
+}
+
+export async function removeFromQueue(queueId: string): Promise<void> {
+  try {
+    const stmt = db.prepare("DELETE FROM tts_queue WHERE id = ?");
+    stmt.run(queueId);
+  } catch (error) {
+    console.error("Error removing from queue:", error);
     throw error;
   }
 }

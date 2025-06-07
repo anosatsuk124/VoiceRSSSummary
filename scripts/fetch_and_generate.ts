@@ -192,6 +192,9 @@ async function processUnprocessedArticles(): Promise<void> {
   console.log("🎧 Processing unprocessed articles...");
 
   try {
+    // Process retry queue first
+    await processRetryQueue();
+
     // Get unprocessed articles (limit to prevent overwhelming)
     const unprocessedArticles = await getUnprocessedArticles(
       Number.parseInt(import.meta.env["LIMIT_UNPROCESSED_ARTICLES"] || "10"),
@@ -204,12 +207,15 @@ async function processUnprocessedArticles(): Promise<void> {
 
     console.log(`🎯 Found ${unprocessedArticles.length} unprocessed articles`);
 
+    // Track articles that successfully generated audio
+    const successfullyGeneratedArticles: string[] = [];
+
     for (const article of unprocessedArticles) {
       try {
         await generatePodcastForArticle(article);
         await markArticleAsProcessed(article.id);
         console.log(`✅ Podcast generated for: ${article.title}`);
-        await updatePodcastRSS(); // Update RSS after each article
+        successfullyGeneratedArticles.push(article.id);
       } catch (error) {
         console.error(
           `❌ Failed to generate podcast for article: ${article.title}`,
@@ -218,8 +224,64 @@ async function processUnprocessedArticles(): Promise<void> {
         // Don't mark as processed if generation failed
       }
     }
+
+    // Only update RSS if at least one article was successfully processed
+    if (successfullyGeneratedArticles.length > 0) {
+      console.log(`📻 Updating podcast RSS for ${successfullyGeneratedArticles.length} new episodes...`);
+      await updatePodcastRSS();
+    }
   } catch (error) {
     console.error("💥 Error processing unprocessed articles:", error);
+    throw error;
+  }
+}
+
+/**
+ * Process retry queue for failed TTS generation
+ */
+async function processRetryQueue(): Promise<void> {
+  const { getQueueItems, updateQueueItemStatus, removeFromQueue } = await import("../services/database.js");
+  
+  console.log("🔄 Processing TTS retry queue...");
+  
+  try {
+    const queueItems = await getQueueItems(5); // Process 5 items at a time
+    
+    if (queueItems.length === 0) {
+      return;
+    }
+
+    console.log(`📋 Found ${queueItems.length} items in retry queue`);
+
+    for (const item of queueItems) {
+      try {
+        console.log(`🔁 Retrying TTS generation for: ${item.itemId} (attempt ${item.retryCount + 1})`);
+        
+        // Mark as processing
+        await updateQueueItemStatus(item.id, 'processing');
+        
+        // Attempt TTS generation
+        await generateTTS(item.itemId, item.scriptText, item.retryCount);
+        
+        // Success - remove from queue
+        await removeFromQueue(item.id);
+        console.log(`✅ TTS retry successful for: ${item.itemId}`);
+        
+      } catch (error) {
+        console.error(`❌ TTS retry failed for: ${item.itemId}`, error);
+        
+        if (item.retryCount >= 2) {
+          // Max retries reached, mark as failed
+          await updateQueueItemStatus(item.id, 'failed');
+          console.log(`💀 Max retries reached for: ${item.itemId}, marking as failed`);
+        } else {
+          // Reset to pending for next retry
+          await updateQueueItemStatus(item.id, 'pending');
+        }
+      }
+    }
+  } catch (error) {
+    console.error("💥 Error processing retry queue:", error);
     throw error;
   }
 }
