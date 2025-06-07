@@ -229,7 +229,7 @@ export async function getUnprocessedArticles(
       SELECT *
       FROM articles
       WHERE processed = 0
-        AND pub_date >= datetime('now','-18 hours')
+        AND pub_date >= datetime('now','-6 hours')
       ORDER BY pub_date DESC
       ${limit ? `LIMIT ${limit}` : ""}
     `;
