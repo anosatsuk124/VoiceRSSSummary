@@ -6,13 +6,17 @@ interface BatchSchedulerState {
   nextRun?: string;
   isRunning: boolean;
   intervalId?: NodeJS.Timeout;
+  canForceStop: boolean;
 }
 
 class BatchScheduler {
   private state: BatchSchedulerState = {
     enabled: true,
     isRunning: false,
+    canForceStop: false,
   };
+  
+  private currentAbortController?: AbortController;
 
   private readonly SIX_HOURS_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
 
@@ -64,16 +68,26 @@ class BatchScheduler {
     }
 
     this.state.isRunning = true;
+    this.state.canForceStop = true;
     this.state.lastRun = new Date().toISOString();
+    
+    // Create new AbortController for this batch run
+    this.currentAbortController = new AbortController();
 
     try {
       console.log("🔄 Running scheduled batch process...");
-      await batchProcess();
+      await batchProcess(this.currentAbortController.signal);
       console.log("✅ Scheduled batch process completed");
     } catch (error) {
-      console.error("❌ Error during scheduled batch process:", error);
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log("🛑 Batch process was forcefully stopped");
+      } else {
+        console.error("❌ Error during scheduled batch process:", error);
+      }
     } finally {
       this.state.isRunning = false;
+      this.state.canForceStop = false;
+      this.currentAbortController = undefined;
     }
   }
 
@@ -115,6 +129,17 @@ class BatchScheduler {
       ...this.state,
       intervalId: undefined, // Don't expose the timeout ID
     };
+  }
+
+  public forceStop(): boolean {
+    if (!this.state.isRunning || !this.currentAbortController) {
+      console.log("ℹ️  No batch process currently running to stop");
+      return false;
+    }
+
+    console.log("🛑 Force stopping batch process...");
+    this.currentAbortController.abort();
+    return true;
   }
 
   public isEnabled(): boolean {

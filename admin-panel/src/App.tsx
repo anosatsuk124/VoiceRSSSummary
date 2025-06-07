@@ -20,6 +20,7 @@ interface Stats {
   batchScheduler: {
     enabled: boolean;
     isRunning: boolean;
+    canForceStop: boolean;
     lastRun?: string;
     nextRun?: string;
   };
@@ -169,6 +170,34 @@ function App() {
     }
   };
 
+  const forceStopBatch = async () => {
+    if (!confirm('実行中のバッチ処理を強制停止しますか？\n\n進行中の処理が中断され、データの整合性に影響が出る可能性があります。')) {
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/admin/batch/force-stop', {
+        method: 'POST'
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        if (data.result === 'STOPPED') {
+          setSuccess(data.message);
+        } else if (data.result === 'NO_PROCESS') {
+          setSuccess(data.message);
+        }
+        loadData(); // Refresh data to update batch status
+      } else {
+        setError(data.error || 'バッチ処理強制停止に失敗しました');
+      }
+    } catch (err) {
+      setError('バッチ処理強制停止に失敗しました');
+      console.error('Error force stopping batch:', err);
+    }
+  };
+
   const toggleBatchScheduler = async (enable: boolean) => {
     try {
       const res = await fetch(`/api/admin/batch/${enable ? 'enable' : 'disable'}`, {
@@ -266,9 +295,22 @@ function App() {
               </div>
 
               <div style={{ marginBottom: '20px' }}>
-                <button className="btn btn-success" onClick={triggerBatch}>
-                  バッチ処理を手動実行
+                <button 
+                  className="btn btn-success" 
+                  onClick={triggerBatch}
+                  disabled={stats?.batchScheduler?.isRunning}
+                >
+                  {stats?.batchScheduler?.isRunning ? 'バッチ処理実行中...' : 'バッチ処理を手動実行'}
                 </button>
+                {stats?.batchScheduler?.canForceStop && (
+                  <button 
+                    className="btn btn-danger" 
+                    onClick={forceStopBatch}
+                    style={{ marginLeft: '8px' }}
+                  >
+                    強制停止
+                  </button>
+                )}
                 <button className="btn btn-primary" onClick={loadData} style={{ marginLeft: '8px' }}>
                   データを再読み込み
                 </button>
@@ -404,15 +446,25 @@ function App() {
 
               <div style={{ marginBottom: '24px' }}>
                 <h4>手動実行</h4>
-                <button 
-                  className="btn btn-primary"
-                  onClick={triggerBatch}
-                  disabled={stats?.batchScheduler?.isRunning}
-                >
-                  {stats?.batchScheduler?.isRunning ? 'バッチ処理実行中...' : 'バッチ処理を手動実行'}
-                </button>
+                <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                  <button 
+                    className="btn btn-primary"
+                    onClick={triggerBatch}
+                    disabled={stats?.batchScheduler?.isRunning}
+                  >
+                    {stats?.batchScheduler?.isRunning ? 'バッチ処理実行中...' : 'バッチ処理を手動実行'}
+                  </button>
+                  {stats?.batchScheduler?.canForceStop && (
+                    <button 
+                      className="btn btn-danger"
+                      onClick={forceStopBatch}
+                    >
+                      強制停止
+                    </button>
+                  )}
+                </div>
                 <p style={{ fontSize: '14px', color: '#6c757d', marginTop: '8px' }}>
-                  スケジューラーの状態に関係なく、バッチ処理を手動で実行できます。
+                  スケジューラーの状態に関係なく、バッチ処理を手動で実行できます。実行中の場合は強制停止も可能です。
                 </p>
               </div>
 
@@ -423,6 +475,7 @@ function App() {
                   <li>新しいRSS記事の取得、要約生成、音声合成を行います</li>
                   <li>スケジューラーが無効の場合、定期実行は停止しますが手動実行は可能です</li>
                   <li>バッチ処理の実行中は重複実行を防ぐため、新たな実行はスキップされます</li>
+                  <li><strong>強制停止:</strong> 実行中のバッチ処理を緊急停止できます（データ整合性に注意）</li>
                 </ul>
               </div>
             </>

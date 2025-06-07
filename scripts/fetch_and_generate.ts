@@ -32,9 +32,14 @@ interface FeedItem {
  * Main batch processing function
  * Processes all feeds and generates podcasts for new articles
  */
-export async function batchProcess(): Promise<void> {
+export async function batchProcess(abortSignal?: AbortSignal): Promise<void> {
   try {
     console.log("🚀 Starting enhanced batch process...");
+
+    // Check for cancellation at start
+    if (abortSignal?.aborted) {
+      throw new Error('Batch process was cancelled before starting');
+    }
 
     // Load feed URLs from file
     const feedUrls = await loadFeedUrls();
@@ -47,22 +52,42 @@ export async function batchProcess(): Promise<void> {
 
     // Process each feed URL
     for (const url of feedUrls) {
+      // Check for cancellation before processing each feed
+      if (abortSignal?.aborted) {
+        throw new Error('Batch process was cancelled during feed processing');
+      }
+      
       try {
-        await processFeedUrl(url);
+        await processFeedUrl(url, abortSignal);
       } catch (error) {
+        // Re-throw cancellation errors
+        if (error instanceof Error && (error.message.includes('cancelled') || error.name === 'AbortError')) {
+          throw error;
+        }
         console.error(`❌ Failed to process feed ${url}:`, error);
         // Continue with other feeds
       }
     }
 
+    // Check for cancellation before processing articles
+    if (abortSignal?.aborted) {
+      throw new Error('Batch process was cancelled before article processing');
+    }
+
     // Process unprocessed articles and generate podcasts
-    await processUnprocessedArticles();
+    await processUnprocessedArticles(abortSignal);
 
     console.log(
       "✅ Enhanced batch process completed:",
       new Date().toISOString(),
     );
   } catch (error) {
+    if (error instanceof Error && (error.message.includes('cancelled') || error.name === 'AbortError')) {
+      console.log("🛑 Batch process was cancelled");
+      const abortError = new Error('Batch process was cancelled');
+      abortError.name = 'AbortError';
+      throw abortError;
+    }
     console.error("💥 Batch process failed:", error);
     throw error;
   }
@@ -90,9 +115,14 @@ async function loadFeedUrls(): Promise<string[]> {
 /**
  * Process a single feed URL and discover new articles
  */
-async function processFeedUrl(url: string): Promise<void> {
+async function processFeedUrl(url: string, abortSignal?: AbortSignal): Promise<void> {
   if (!url || !url.startsWith("http")) {
     throw new Error(`Invalid feed URL: ${url}`);
+  }
+
+  // Check for cancellation
+  if (abortSignal?.aborted) {
+    throw new Error('Feed processing was cancelled');
   }
 
   console.log(`🔍 Processing feed: ${url}`);
@@ -101,6 +131,11 @@ async function processFeedUrl(url: string): Promise<void> {
     // Parse RSS feed
     const parser = new Parser<FeedItem>();
     const feed = await parser.parseURL(url);
+    
+    // Check for cancellation after parsing
+    if (abortSignal?.aborted) {
+      throw new Error('Feed processing was cancelled');
+    }
 
     // Get or create feed record
     let feedRecord = await getFeedByUrl(url);
@@ -189,12 +224,22 @@ async function discoverNewArticles(
 /**
  * Process unprocessed articles and generate podcasts
  */
-async function processUnprocessedArticles(): Promise<void> {
+async function processUnprocessedArticles(abortSignal?: AbortSignal): Promise<void> {
   console.log("🎧 Processing unprocessed articles...");
 
   try {
+    // Check for cancellation
+    if (abortSignal?.aborted) {
+      throw new Error('Article processing was cancelled');
+    }
+
     // Process retry queue first
-    await processRetryQueue();
+    await processRetryQueue(abortSignal);
+
+    // Check for cancellation after retry queue
+    if (abortSignal?.aborted) {
+      throw new Error('Article processing was cancelled');
+    }
 
     // Get unprocessed articles (limit to prevent overwhelming)
     const unprocessedArticles = await getUnprocessedArticles(
@@ -212,8 +257,13 @@ async function processUnprocessedArticles(): Promise<void> {
     let successfullyGeneratedCount = 0;
 
     for (const article of unprocessedArticles) {
+      // Check for cancellation before processing each article
+      if (abortSignal?.aborted) {
+        throw new Error('Article processing was cancelled');
+      }
+      
       try {
-        const episodeCreated = await generatePodcastForArticle(article);
+        const episodeCreated = await generatePodcastForArticle(article, abortSignal);
         
         // Only mark as processed and update RSS if episode was actually created
         if (episodeCreated) {
@@ -233,6 +283,10 @@ async function processUnprocessedArticles(): Promise<void> {
           console.warn(`⚠️  Episode creation failed for: ${article.title} - not marking as processed`);
         }
       } catch (error) {
+        if (error instanceof Error && (error.message.includes('cancelled') || error.name === 'AbortError')) {
+          console.log(`🛑 Article processing cancelled, stopping batch`);
+          throw error; // Re-throw to propagate cancellation
+        }
         console.error(
           `❌ Failed to generate podcast for article: ${article.title}`,
           error,
@@ -254,7 +308,7 @@ async function processUnprocessedArticles(): Promise<void> {
 /**
  * Process retry queue for failed TTS generation
  */
-async function processRetryQueue(): Promise<void> {
+async function processRetryQueue(abortSignal?: AbortSignal): Promise<void> {
   const { getQueueItems, updateQueueItemStatus, removeFromQueue } = await import("../services/database.js");
   const { Database } = await import("bun:sqlite");
   const db = new Database(config.paths.dbPath);
@@ -271,6 +325,11 @@ async function processRetryQueue(): Promise<void> {
     console.log(`📋 Found ${queueItems.length} items in retry queue`);
 
     for (const item of queueItems) {
+      // Check for cancellation before processing each retry item
+      if (abortSignal?.aborted) {
+        throw new Error('Retry queue processing was cancelled');
+      }
+      
       try {
         console.log(`🔁 Retrying TTS generation for: ${item.itemId} (attempt ${item.retryCount + 1}/3)`);
         
@@ -294,6 +353,11 @@ async function processRetryQueue(): Promise<void> {
         }
         
       } catch (error) {
+        if (error instanceof Error && (error.message.includes('cancelled') || error.name === 'AbortError')) {
+          console.log(`🛑 TTS retry processing cancelled for: ${item.itemId}`);
+          throw error; // Re-throw cancellation errors
+        }
+        
         console.error(`❌ TTS retry failed for: ${item.itemId}`, error);
         
         try {
@@ -330,19 +394,34 @@ async function processRetryQueue(): Promise<void> {
  * Generate podcast for a single article
  * Returns true if episode was successfully created, false otherwise
  */
-async function generatePodcastForArticle(article: any): Promise<boolean> {
+async function generatePodcastForArticle(article: any, abortSignal?: AbortSignal): Promise<boolean> {
   console.log(`🎤 Generating podcast for: ${article.title}`);
 
   try {
+    // Check for cancellation
+    if (abortSignal?.aborted) {
+      throw new Error('Podcast generation was cancelled');
+    }
+
     // Get feed information for context
     const feed = await getFeedById(article.feedId);
     const feedTitle = feed?.title || "Unknown Feed";
+
+    // Check for cancellation before classification
+    if (abortSignal?.aborted) {
+      throw new Error('Podcast generation was cancelled');
+    }
 
     // Classify the article/feed
     const category = await openAI_ClassifyFeed(
       `${feedTitle}: ${article.title}`,
     );
     console.log(`🏷️  Article classified as: ${category}`);
+
+    // Check for cancellation before content generation
+    if (abortSignal?.aborted) {
+      throw new Error('Podcast generation was cancelled');
+    }
 
     // Generate podcast content for this single article
     const podcastContent = await openAI_GeneratePodcastContent(article.title, [
@@ -351,6 +430,11 @@ async function generatePodcastForArticle(article: any): Promise<boolean> {
         link: article.link,
       },
     ]);
+    
+    // Check for cancellation before TTS
+    if (abortSignal?.aborted) {
+      throw new Error('Podcast generation was cancelled');
+    }
 
     // Generate unique ID for the episode
     const episodeId = crypto.randomUUID();
@@ -410,6 +494,10 @@ async function generatePodcastForArticle(article: any): Promise<boolean> {
       return false;
     }
   } catch (error) {
+    if (error instanceof Error && (error.message.includes('cancelled') || error.name === 'AbortError')) {
+      console.log(`🛑 Podcast generation cancelled for: ${article.title}`);
+      throw error; // Re-throw cancellation errors to stop the batch
+    }
     console.error(
       `💥 Error generating podcast for article: ${article.title}`,
       error,

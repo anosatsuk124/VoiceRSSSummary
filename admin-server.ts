@@ -378,6 +378,31 @@ app.post("/api/admin/batch/trigger", async (c) => {
   }
 });
 
+app.post("/api/admin/batch/force-stop", async (c) => {
+  try {
+    console.log("🛑 Force stop batch process requested via admin panel");
+    
+    const stopped = batchScheduler.forceStop();
+    
+    if (stopped) {
+      return c.json({ 
+        result: "STOPPED",
+        message: "Batch process force stop signal sent",
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      return c.json({ 
+        result: "NO_PROCESS",
+        message: "No batch process is currently running",
+        timestamp: new Date().toISOString()
+      }, 200);
+    }
+  } catch (error) {
+    console.error("Error force stopping batch process:", error);
+    return c.json({ error: "Failed to force stop batch process" }, 500);
+  }
+});
+
 // Static file handlers for admin panel UI
 app.get("/assets/*", async (c) => {
   try {
