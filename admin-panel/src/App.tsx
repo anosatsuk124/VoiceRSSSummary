@@ -33,15 +33,30 @@ interface EnvVars {
   [key: string]: string | undefined;
 }
 
+interface FeedRequest {
+  id: string;
+  url: string;
+  requestedBy?: string;
+  requestMessage?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  adminNotes?: string;
+}
+
 function App() {
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [envVars, setEnvVars] = useState<EnvVars>({});
+  const [feedRequests, setFeedRequests] = useState<FeedRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [newFeedUrl, setNewFeedUrl] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'feeds' | 'env' | 'batch'>('dashboard');
+  const [requestFilter, setRequestFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [approvalNotes, setApprovalNotes] = useState<{[key: string]: string}>({});
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'feeds' | 'env' | 'batch' | 'requests'>('dashboard');
 
   useEffect(() => {
     loadData();
@@ -50,25 +65,28 @@ function App() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [feedsRes, statsRes, envRes] = await Promise.all([
+      const [feedsRes, statsRes, envRes, requestsRes] = await Promise.all([
         fetch('/api/admin/feeds'),
         fetch('/api/admin/stats'),
-        fetch('/api/admin/env')
+        fetch('/api/admin/env'),
+        fetch('/api/admin/feed-requests')
       ]);
 
-      if (!feedsRes.ok || !statsRes.ok || !envRes.ok) {
+      if (!feedsRes.ok || !statsRes.ok || !envRes.ok || !requestsRes.ok) {
         throw new Error('Failed to load data');
       }
 
-      const [feedsData, statsData, envData] = await Promise.all([
+      const [feedsData, statsData, envData, requestsData] = await Promise.all([
         feedsRes.json(),
         statsRes.json(),
-        envRes.json()
+        envRes.json(),
+        requestsRes.json()
       ]);
 
       setFeeds(feedsData);
       setStats(statsData);
       setEnvVars(envData);
+      setFeedRequests(requestsData);
       setError(null);
     } catch (err) {
       setError('データの読み込みに失敗しました');
@@ -218,6 +236,65 @@ function App() {
     }
   };
 
+  const approveFeedRequest = async (requestId: string, notes: string) => {
+    try {
+      const res = await fetch(`/api/admin/feed-requests/${requestId}/approve`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminNotes: notes })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setSuccess(data.message || 'フィードリクエストを承認しました');
+        setApprovalNotes({ ...approvalNotes, [requestId]: '' });
+        loadData();
+      } else {
+        setError(data.error || 'フィードリクエストの承認に失敗しました');
+      }
+    } catch (err) {
+      setError('フィードリクエストの承認に失敗しました');
+      console.error('Error approving feed request:', err);
+    }
+  };
+
+  const rejectFeedRequest = async (requestId: string, notes: string) => {
+    if (!confirm('このフィードリクエストを拒否しますか？')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/admin/feed-requests/${requestId}/reject`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminNotes: notes })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setSuccess(data.message || 'フィードリクエストを拒否しました');
+        setApprovalNotes({ ...approvalNotes, [requestId]: '' });
+        loadData();
+      } else {
+        setError(data.error || 'フィードリクエストの拒否に失敗しました');
+      }
+    } catch (err) {
+      setError('フィードリクエストの拒否に失敗しました');
+      console.error('Error rejecting feed request:', err);
+    }
+  };
+
+  const updateApprovalNotes = (requestId: string, notes: string) => {
+    setApprovalNotes({ ...approvalNotes, [requestId]: notes });
+  };
+
+  const filteredRequests = feedRequests.filter(request => {
+    if (requestFilter === 'all') return true;
+    return request.status === requestFilter;
+  });
+
   if (loading) {
     return <div className="container"><div className="loading">読み込み中...</div></div>;
   }
@@ -252,6 +329,12 @@ function App() {
               onClick={() => setActiveTab('batch')}
             >
               バッチ管理
+            </button>
+            <button 
+              className={`btn ${activeTab === 'requests' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setActiveTab('requests')}
+            >
+              フィード承認
             </button>
             <button 
               className={`btn ${activeTab === 'env' ? 'btn-primary' : 'btn-secondary'}`}
@@ -478,6 +561,118 @@ function App() {
                   <li><strong>強制停止:</strong> 実行中のバッチ処理を緊急停止できます（データ整合性に注意）</li>
                 </ul>
               </div>
+            </>
+          )}
+
+          {activeTab === 'requests' && (
+            <>
+              <h3>フィードリクエスト管理</h3>
+              <p style={{ marginBottom: '20px', color: '#7f8c8d' }}>
+                ユーザーから送信されたフィード追加リクエストを承認・拒否できます。
+              </p>
+
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button 
+                    className={`btn ${requestFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setRequestFilter('all')}
+                  >
+                    すべて ({feedRequests.length})
+                  </button>
+                  <button 
+                    className={`btn ${requestFilter === 'pending' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setRequestFilter('pending')}
+                  >
+                    保留中 ({feedRequests.filter(r => r.status === 'pending').length})
+                  </button>
+                  <button 
+                    className={`btn ${requestFilter === 'approved' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setRequestFilter('approved')}
+                  >
+                    承認済み ({feedRequests.filter(r => r.status === 'approved').length})
+                  </button>
+                  <button 
+                    className={`btn ${requestFilter === 'rejected' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setRequestFilter('rejected')}
+                  >
+                    拒否済み ({feedRequests.filter(r => r.status === 'rejected').length})
+                  </button>
+                </div>
+              </div>
+
+              {filteredRequests.length === 0 ? (
+                <p style={{ color: '#7f8c8d', textAlign: 'center', padding: '20px' }}>
+                  {requestFilter === 'all' ? 'フィードリクエストがありません' : `${requestFilter === 'pending' ? '保留中' : requestFilter === 'approved' ? '承認済み' : '拒否済み'}のリクエストがありません`}
+                </p>
+              ) : (
+                <div className="requests-list">
+                  {filteredRequests.map((request) => (
+                    <div key={request.id} className="feed-item" style={{ marginBottom: '16px' }}>
+                      <div className="feed-info">
+                        <h4 style={{ margin: '0 0 8px 0', fontSize: '16px' }}>{request.url}</h4>
+                        {request.requestMessage && (
+                          <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>
+                            メッセージ: {request.requestMessage}
+                          </p>
+                        )}
+                        <div style={{ fontSize: '12px', color: '#999' }}>
+                          <span>申請者: {request.requestedBy || '匿名'}</span>
+                          <span style={{ margin: '0 8px' }}>|</span>
+                          <span>申請日: {new Date(request.createdAt).toLocaleString('ja-JP')}</span>
+                          {request.reviewedAt && (
+                            <>
+                              <span style={{ margin: '0 8px' }}>|</span>
+                              <span>審査日: {new Date(request.reviewedAt).toLocaleString('ja-JP')}</span>
+                            </>
+                          )}
+                        </div>
+                        <span className={`status ${request.status === 'approved' ? 'active' : request.status === 'rejected' ? 'inactive' : ''}`}>
+                          {request.status === 'pending' ? '保留中' : request.status === 'approved' ? '承認済み' : '拒否済み'}
+                        </span>
+                        {request.adminNotes && (
+                          <div style={{ marginTop: '8px', padding: '8px', background: '#f8f9fa', borderRadius: '4px', fontSize: '14px' }}>
+                            <strong>管理者メモ:</strong> {request.adminNotes}
+                          </div>
+                        )}
+                      </div>
+                      {request.status === 'pending' && (
+                        <div className="feed-actions" style={{ flexDirection: 'column', gap: '8px', minWidth: '200px' }}>
+                          <textarea
+                            placeholder="管理者メモ（任意）"
+                            value={approvalNotes[request.id] || ''}
+                            onChange={(e) => updateApprovalNotes(request.id, e.target.value)}
+                            style={{
+                              width: '100%',
+                              minHeight: '60px',
+                              padding: '8px',
+                              border: '1px solid #ddd',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              resize: 'vertical'
+                            }}
+                          />
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            <button
+                              className="btn btn-success"
+                              onClick={() => approveFeedRequest(request.id, approvalNotes[request.id] || '')}
+                              style={{ fontSize: '12px', padding: '6px 12px' }}
+                            >
+                              承認
+                            </button>
+                            <button
+                              className="btn btn-danger"
+                              onClick={() => rejectFeedRequest(request.id, approvalNotes[request.id] || '')}
+                              style={{ fontSize: '12px', padding: '6px 12px' }}
+                            >
+                              拒否
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
 
