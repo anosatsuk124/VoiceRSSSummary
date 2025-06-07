@@ -9,14 +9,14 @@ function initializeDatabase(): Database {
   if (!fs.existsSync(config.paths.dataDir)) {
     fs.mkdirSync(config.paths.dataDir, { recursive: true });
   }
-  
+
   // Create database file if it doesn't exist
   if (!fs.existsSync(config.paths.dbPath)) {
     fs.closeSync(fs.openSync(config.paths.dbPath, "w"));
   }
-  
+
   const db = new Database(config.paths.dbPath);
-  
+
   // Ensure schema is set up - use the complete schema
   db.exec(`CREATE TABLE IF NOT EXISTS feeds (
     id TEXT PRIMARY KEY,
@@ -65,7 +65,7 @@ function initializeDatabase(): Database {
   CREATE INDEX IF NOT EXISTS idx_articles_processed ON articles(processed);
   CREATE INDEX IF NOT EXISTS idx_episodes_article_id ON episodes(article_id);
   CREATE INDEX IF NOT EXISTS idx_feeds_active ON feeds(active);`);
-  
+
   return db;
 }
 
@@ -114,15 +114,25 @@ export interface LegacyEpisode {
 }
 
 // Feed management functions
-export async function saveFeed(feed: Omit<Feed, 'id' | 'createdAt'>): Promise<string> {
+export async function saveFeed(
+  feed: Omit<Feed, "id" | "createdAt">,
+): Promise<string> {
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
-  
+
   try {
     const stmt = db.prepare(
-      "INSERT OR REPLACE INTO feeds (id, url, title, description, last_updated, created_at, active) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      "INSERT OR REPLACE INTO feeds (id, url, title, description, last_updated, created_at, active) VALUES (?, ?, ?, ?, ?, ?, ?)",
     );
-    stmt.run(id, feed.url, feed.title || null, feed.description || null, feed.lastUpdated || null, createdAt, feed.active ? 1 : 0);
+    stmt.run(
+      id,
+      feed.url,
+      feed.title || null,
+      feed.description || null,
+      feed.lastUpdated || null,
+      createdAt,
+      feed.active ? 1 : 0,
+    );
     return id;
   } catch (error) {
     console.error("Error saving feed:", error);
@@ -135,7 +145,7 @@ export async function getFeedByUrl(url: string): Promise<Feed | null> {
     const stmt = db.prepare("SELECT * FROM feeds WHERE url = ?");
     const row = stmt.get(url) as any;
     if (!row) return null;
-    
+
     return {
       id: row.id,
       url: row.url,
@@ -143,7 +153,7 @@ export async function getFeedByUrl(url: string): Promise<Feed | null> {
       description: row.description,
       lastUpdated: row.last_updated,
       createdAt: row.created_at,
-      active: Boolean(row.active)
+      active: Boolean(row.active),
     };
   } catch (error) {
     console.error("Error getting feed by URL:", error);
@@ -153,17 +163,19 @@ export async function getFeedByUrl(url: string): Promise<Feed | null> {
 
 export async function getAllFeeds(): Promise<Feed[]> {
   try {
-    const stmt = db.prepare("SELECT * FROM feeds WHERE active = 1 ORDER BY created_at DESC");
+    const stmt = db.prepare(
+      "SELECT * FROM feeds WHERE active = 1 ORDER BY created_at DESC",
+    );
     const rows = stmt.all() as any[];
-    
-    return rows.map(row => ({
+
+    return rows.map((row) => ({
       id: row.id,
       url: row.url,
       title: row.title,
       description: row.description,
       lastUpdated: row.last_updated,
       createdAt: row.created_at,
-      active: Boolean(row.active)
+      active: Boolean(row.active),
     }));
   } catch (error) {
     console.error("Error getting all feeds:", error);
@@ -172,22 +184,36 @@ export async function getAllFeeds(): Promise<Feed[]> {
 }
 
 // Article management functions
-export async function saveArticle(article: Omit<Article, 'id' | 'discoveredAt'>): Promise<string> {
+export async function saveArticle(
+  article: Omit<Article, "id" | "discoveredAt">,
+): Promise<string> {
   const id = crypto.randomUUID();
   const discoveredAt = new Date().toISOString();
-  
+
   try {
     const stmt = db.prepare(
-      "INSERT OR IGNORE INTO articles (id, feed_id, title, link, description, content, pub_date, discovered_at, processed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT OR IGNORE INTO articles (id, feed_id, title, link, description, content, pub_date, discovered_at, processed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     );
-    const result = stmt.run(id, article.feedId, article.title, article.link, article.description || null, article.content || null, article.pubDate, discoveredAt, article.processed ? 1 : 0);
-    
+    const result = stmt.run(
+      id,
+      article.feedId,
+      article.title,
+      article.link,
+      article.description || null,
+      article.content || null,
+      article.pubDate,
+      discoveredAt,
+      article.processed ? 1 : 0,
+    );
+
     // Return existing ID if article already exists
     if (result.changes === 0) {
-      const existing = db.prepare("SELECT id FROM articles WHERE link = ?").get(article.link) as any;
+      const existing = db
+        .prepare("SELECT id FROM articles WHERE link = ?")
+        .get(article.link) as any;
       return existing?.id || id;
     }
-    
+
     return id;
   } catch (error) {
     console.error("Error saving article:", error);
@@ -195,13 +221,22 @@ export async function saveArticle(article: Omit<Article, 'id' | 'discoveredAt'>)
   }
 }
 
-export async function getUnprocessedArticles(limit?: number): Promise<Article[]> {
+export async function getUnprocessedArticles(
+  limit?: number,
+): Promise<Article[]> {
   try {
-    const sql = `SELECT * FROM articles WHERE processed = 0 ORDER BY pub_date DESC ${limit ? `LIMIT ${limit}` : ''}`;
+    const sql = `
+      SELECT *
+      FROM articles
+      WHERE processed = 0
+        AND pub_date >= datetime('now','-2 days')
+      ORDER BY pub_date DESC
+      ${limit ? `LIMIT ${limit}` : ""}
+    `;
     const stmt = db.prepare(sql);
     const rows = stmt.all() as any[];
-    
-    return rows.map(row => ({
+
+    return rows.map((row) => ({
       id: row.id,
       feedId: row.feed_id,
       title: row.title,
@@ -210,7 +245,7 @@ export async function getUnprocessedArticles(limit?: number): Promise<Article[]>
       content: row.content,
       pubDate: row.pub_date,
       discoveredAt: row.discovered_at,
-      processed: Boolean(row.processed)
+      processed: Boolean(row.processed),
     }));
   } catch (error) {
     console.error("Error getting unprocessed articles:", error);
@@ -236,14 +271,14 @@ export async function markAsProcessed(
   if (!feedUrl || !itemId) {
     throw new Error("feedUrl and itemId are required");
   }
-  
+
   try {
     const stmt = db.prepare(
       "SELECT 1 FROM processed_feed_items WHERE feed_url = ? AND item_id = ?",
     );
     const row = stmt.get(feedUrl, itemId);
     if (row) return true;
-    
+
     const insert = db.prepare(
       "INSERT INTO processed_feed_items (feed_url, item_id, processed_at) VALUES (?, ?, ?)",
     );
@@ -256,19 +291,30 @@ export async function markAsProcessed(
 }
 
 // Episode management functions
-export async function saveEpisode(episode: Omit<Episode, 'id' | 'createdAt'>): Promise<string> {
+export async function saveEpisode(
+  episode: Omit<Episode, "id" | "createdAt">,
+): Promise<string> {
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
-  
+
   if (!episode.articleId || !episode.title || !episode.audioPath) {
     throw new Error("articleId, title, and audioPath are required");
   }
-  
+
   try {
     const stmt = db.prepare(
       "INSERT INTO episodes (id, article_id, title, description, audio_path, duration, file_size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     );
-    stmt.run(id, episode.articleId, episode.title, episode.description || null, episode.audioPath, episode.duration || null, episode.fileSize || null, createdAt);
+    stmt.run(
+      id,
+      episode.articleId,
+      episode.title,
+      episode.description || null,
+      episode.audioPath,
+      episode.duration || null,
+      episode.fileSize || null,
+      createdAt,
+    );
     return id;
   } catch (error) {
     console.error("Error saving episode:", error);
@@ -281,14 +327,14 @@ export async function saveLegacyEpisode(ep: LegacyEpisode): Promise<void> {
   if (!ep.id || !ep.title || !ep.pubDate || !ep.audioPath || !ep.sourceLink) {
     throw new Error("All episode fields are required");
   }
-  
+
   try {
     // For now, save to a temporary table for migration
     const stmt = db.prepare(
-      "CREATE TABLE IF NOT EXISTS legacy_episodes (id TEXT PRIMARY KEY, title TEXT, pubDate TEXT, audioPath TEXT, sourceLink TEXT)"
+      "CREATE TABLE IF NOT EXISTS legacy_episodes (id TEXT PRIMARY KEY, title TEXT, pubDate TEXT, audioPath TEXT, sourceLink TEXT)",
     );
     stmt.run();
-    
+
     const insert = db.prepare(
       "INSERT OR IGNORE INTO legacy_episodes (id, title, pubDate, audioPath, sourceLink) VALUES (?, ?, ?, ?, ?)",
     );
@@ -321,7 +367,9 @@ export async function fetchAllEpisodes(): Promise<Episode[]> {
   }
 }
 
-export async function fetchEpisodesWithArticles(): Promise<(Episode & { article: Article, feed: Feed })[]> {
+export async function fetchEpisodesWithArticles(): Promise<
+  (Episode & { article: Article; feed: Feed })[]
+> {
   try {
     const stmt = db.prepare(`
       SELECT 
@@ -354,10 +402,10 @@ export async function fetchEpisodesWithArticles(): Promise<(Episode & { article:
       JOIN feeds f ON a.feed_id = f.id
       ORDER BY e.created_at DESC
     `);
-    
+
     const rows = stmt.all() as any[];
-    
-    return rows.map(row => ({
+
+    return rows.map((row) => ({
       id: row.id,
       articleId: row.articleId,
       title: row.title,
@@ -375,7 +423,7 @@ export async function fetchEpisodesWithArticles(): Promise<(Episode & { article:
         content: row.article_content,
         pubDate: row.article_pubDate,
         discoveredAt: row.article_discoveredAt,
-        processed: Boolean(row.article_processed)
+        processed: Boolean(row.article_processed),
       },
       feed: {
         id: row.feed_id,
@@ -384,8 +432,8 @@ export async function fetchEpisodesWithArticles(): Promise<(Episode & { article:
         description: row.feed_description,
         lastUpdated: row.feed_lastUpdated,
         createdAt: row.feed_createdAt,
-        active: Boolean(row.feed_active)
-      }
+        active: Boolean(row.feed_active),
+      },
     }));
   } catch (error) {
     console.error("Error fetching episodes with articles:", error);
