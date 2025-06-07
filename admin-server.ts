@@ -14,6 +14,7 @@ import {
   updateFeedRequestStatus,
 } from "./services/database.js";
 import { batchProcess, addNewFeedUrl } from "./scripts/fetch_and_generate.js";
+import { batchScheduler } from "./services/batch-scheduler.js";
 
 // Validate configuration on startup
 try {
@@ -284,12 +285,52 @@ app.patch("/api/admin/feed-requests/:id/reject", async (c) => {
   }
 });
 
+// Batch scheduler management
+app.get("/api/admin/batch/status", async (c) => {
+  try {
+    const status = batchScheduler.getStatus();
+    return c.json(status);
+  } catch (error) {
+    console.error("Error fetching batch status:", error);
+    return c.json({ error: "Failed to fetch batch status" }, 500);
+  }
+});
+
+app.post("/api/admin/batch/enable", async (c) => {
+  try {
+    batchScheduler.enable();
+    return c.json({ 
+      success: true, 
+      message: "Batch scheduler enabled successfully",
+      status: batchScheduler.getStatus()
+    });
+  } catch (error) {
+    console.error("Error enabling batch scheduler:", error);
+    return c.json({ error: "Failed to enable batch scheduler" }, 500);
+  }
+});
+
+app.post("/api/admin/batch/disable", async (c) => {
+  try {
+    batchScheduler.disable();
+    return c.json({ 
+      success: true, 
+      message: "Batch scheduler disabled successfully",
+      status: batchScheduler.getStatus()
+    });
+  } catch (error) {
+    console.error("Error disabling batch scheduler:", error);
+    return c.json({ error: "Failed to disable batch scheduler" }, 500);
+  }
+});
+
 // System management
 app.get("/api/admin/stats", async (c) => {
   try {
     const feeds = await getAllFeedsIncludingInactive();
     const episodes = await fetchAllEpisodes();
     const feedRequests = await getFeedRequests();
+    const batchStatus = batchScheduler.getStatus();
     
     const stats = {
       totalFeeds: feeds.length,
@@ -298,6 +339,12 @@ app.get("/api/admin/stats", async (c) => {
       totalEpisodes: episodes.length,
       pendingRequests: feedRequests.filter(r => r.status === 'pending').length,
       totalRequests: feedRequests.length,
+      batchScheduler: {
+        enabled: batchStatus.enabled,
+        isRunning: batchStatus.isRunning,
+        lastRun: batchStatus.lastRun,
+        nextRun: batchStatus.nextRun,
+      },
       lastUpdated: new Date().toISOString(),
       adminPort: config.admin.port,
       authEnabled: !!(config.admin.username && config.admin.password),
@@ -314,8 +361,8 @@ app.post("/api/admin/batch/trigger", async (c) => {
   try {
     console.log("🚀 Manual batch process triggered via admin panel");
     
-    // Run batch process in background
-    runBatchProcess().catch(error => {
+    // Use the batch scheduler's manual trigger method
+    batchScheduler.triggerManualRun().catch(error => {
       console.error("❌ Manual admin batch process failed:", error);
     });
     

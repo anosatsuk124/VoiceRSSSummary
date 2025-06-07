@@ -15,6 +15,14 @@ interface Stats {
   activeFeeds: number;
   inactiveFeeds: number;
   totalEpisodes: number;
+  pendingRequests: number;
+  totalRequests: number;
+  batchScheduler: {
+    enabled: boolean;
+    isRunning: boolean;
+    lastRun?: string;
+    nextRun?: string;
+  };
   lastUpdated: string;
   adminPort: number;
   authEnabled: boolean;
@@ -32,7 +40,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [newFeedUrl, setNewFeedUrl] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'feeds' | 'env'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'feeds' | 'env' | 'batch'>('dashboard');
 
   useEffect(() => {
     loadData();
@@ -151,12 +159,33 @@ function App() {
 
       if (res.ok) {
         setSuccess(data.message);
+        loadData(); // Refresh data to update batch status
       } else {
         setError(data.error || 'バッチ処理開始に失敗しました');
       }
     } catch (err) {
       setError('バッチ処理開始に失敗しました');
       console.error('Error triggering batch:', err);
+    }
+  };
+
+  const toggleBatchScheduler = async (enable: boolean) => {
+    try {
+      const res = await fetch(`/api/admin/batch/${enable ? 'enable' : 'disable'}`, {
+        method: 'POST'
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setSuccess(data.message);
+        loadData(); // Refresh data to update batch status
+      } else {
+        setError(data.error || 'バッチスケジューラーの状態変更に失敗しました');
+      }
+    } catch (err) {
+      setError('バッチスケジューラーの状態変更に失敗しました');
+      console.error('Error toggling batch scheduler:', err);
     }
   };
 
@@ -190,6 +219,12 @@ function App() {
               フィード管理
             </button>
             <button 
+              className={`btn ${activeTab === 'batch' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setActiveTab('batch')}
+            >
+              バッチ管理
+            </button>
+            <button 
               className={`btn ${activeTab === 'env' ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => setActiveTab('env')}
             >
@@ -217,6 +252,16 @@ function App() {
                 <div className="stat-card">
                   <div className="value">{stats?.totalEpisodes || 0}</div>
                   <div className="label">総エピソード数</div>
+                </div>
+                <div className="stat-card">
+                  <div className="value">{stats?.pendingRequests || 0}</div>
+                  <div className="label">保留中リクエスト</div>
+                </div>
+                <div className="stat-card">
+                  <div className="value" style={{ color: stats?.batchScheduler?.enabled ? '#28a745' : '#dc3545' }}>
+                    {stats?.batchScheduler?.enabled ? 'ON' : 'OFF'}
+                  </div>
+                  <div className="label">バッチスケジューラー</div>
                 </div>
               </div>
 
@@ -292,6 +337,93 @@ function App() {
                     ))}
                   </ul>
                 )}
+              </div>
+            </>
+          )}
+
+          {activeTab === 'batch' && (
+            <>
+              <h3>バッチ処理管理</h3>
+              <p style={{ marginBottom: '20px', color: '#7f8c8d' }}>
+                定期バッチ処理の状態管理と手動実行を行えます。
+              </p>
+
+              <div className="stats-grid" style={{ marginBottom: '24px' }}>
+                <div className="stat-card">
+                  <div className="value" style={{ color: stats?.batchScheduler?.enabled ? '#28a745' : '#dc3545' }}>
+                    {stats?.batchScheduler?.enabled ? '有効' : '無効'}
+                  </div>
+                  <div className="label">スケジューラー状態</div>
+                </div>
+                <div className="stat-card">
+                  <div className="value" style={{ color: stats?.batchScheduler?.isRunning ? '#ffc107' : '#6c757d' }}>
+                    {stats?.batchScheduler?.isRunning ? '実行中' : '待機中'}
+                  </div>
+                  <div className="label">実行状態</div>
+                </div>
+                <div className="stat-card">
+                  <div className="value" style={{ fontSize: '12px' }}>
+                    {stats?.batchScheduler?.lastRun 
+                      ? new Date(stats.batchScheduler.lastRun).toLocaleString('ja-JP')
+                      : '未実行'}
+                  </div>
+                  <div className="label">前回実行</div>
+                </div>
+                <div className="stat-card">
+                  <div className="value" style={{ fontSize: '12px' }}>
+                    {stats?.batchScheduler?.nextRun 
+                      ? new Date(stats.batchScheduler.nextRun).toLocaleString('ja-JP')
+                      : '未予定'}
+                  </div>
+                  <div className="label">次回実行</div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <h4>スケジューラー制御</h4>
+                <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                  <button 
+                    className="btn btn-success"
+                    onClick={() => toggleBatchScheduler(true)}
+                    disabled={stats?.batchScheduler?.enabled}
+                  >
+                    スケジューラーを有効化
+                  </button>
+                  <button 
+                    className="btn btn-warning"
+                    onClick={() => toggleBatchScheduler(false)}
+                    disabled={!stats?.batchScheduler?.enabled}
+                  >
+                    スケジューラーを無効化
+                  </button>
+                </div>
+                <p style={{ fontSize: '14px', color: '#6c757d', marginTop: '8px' }}>
+                  スケジューラーを無効化すると、定期的なバッチ処理が停止します。手動実行は引き続き可能です。
+                </p>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <h4>手動実行</h4>
+                <button 
+                  className="btn btn-primary"
+                  onClick={triggerBatch}
+                  disabled={stats?.batchScheduler?.isRunning}
+                >
+                  {stats?.batchScheduler?.isRunning ? 'バッチ処理実行中...' : 'バッチ処理を手動実行'}
+                </button>
+                <p style={{ fontSize: '14px', color: '#6c757d', marginTop: '8px' }}>
+                  スケジューラーの状態に関係なく、バッチ処理を手動で実行できます。
+                </p>
+              </div>
+
+              <div style={{ padding: '16px', background: '#f8f9fa', borderRadius: '4px' }}>
+                <h4>バッチ処理について</h4>
+                <ul style={{ fontSize: '14px', color: '#6c757d', marginTop: '8px', paddingLeft: '20px' }}>
+                  <li>定期バッチ処理は6時間ごとに実行されます</li>
+                  <li>新しいRSS記事の取得、要約生成、音声合成を行います</li>
+                  <li>スケジューラーが無効の場合、定期実行は停止しますが手動実行は可能です</li>
+                  <li>バッチ処理の実行中は重複実行を防ぐため、新たな実行はスキップされます</li>
+                </ul>
               </div>
             </>
           )}

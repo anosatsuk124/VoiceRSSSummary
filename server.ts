@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import path from "path";
 import { config, validateConfig } from "./services/config.js";
-import { batchProcess } from "./scripts/fetch_and_generate.js";
+import { batchScheduler } from "./services/batch-scheduler.js";
 
 // Validate configuration on startup
 try {
@@ -148,47 +148,8 @@ app.post("/api/feed-requests", async (c) => {
 // Catch-all for SPA routing
 app.get("*", serveIndex);
 
-// Batch processing functions
-function scheduleFirstBatchProcess() {
-  setTimeout(async () => {
-    try {
-      console.log("🚀 Running initial batch process...");
-      await runBatchProcess();
-      console.log("✅ Initial batch process completed");
-    } catch (error) {
-      console.error("❌ Error during initial batch process:", error);
-    }
-  }, 10000); // Wait 10 seconds after startup
-}
-
-function scheduleSixHourlyBatchProcess() {
-  const SIX_HOURS_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
-  
-  console.log(
-    `🕕 Next batch process scheduled in 6 hours (${new Date(Date.now() + SIX_HOURS_MS).toLocaleString()})`
-  );
-
-  setTimeout(async () => {
-    try {
-      console.log("🔄 Running scheduled 6-hourly batch process...");
-      await runBatchProcess();
-      console.log("✅ Scheduled batch process completed");
-    } catch (error) {
-      console.error("❌ Error during scheduled batch process:", error);
-    }
-    // Schedule next run
-    scheduleSixHourlyBatchProcess();
-  }, SIX_HOURS_MS);
-}
-
-async function runBatchProcess(): Promise<void> {
-  try {
-    await batchProcess();
-  } catch (error) {
-    console.error("Batch process failed:", error);
-    throw error;
-  }
-}
+// Batch processing - now using batch scheduler
+console.log("🔄 Batch scheduler initialized and ready");
 
 // サーバー起動
 serve(
@@ -200,9 +161,6 @@ serve(
     console.log(`🌟 Server is running on http://localhost:${info.port}`);
     console.log(`📡 Using configuration from: ${config.paths.projectRoot}`);
     console.log(`🗄️  Database: ${config.paths.dbPath}`);
-    
-    // Schedule batch processes
-    scheduleFirstBatchProcess();
-    scheduleSixHourlyBatchProcess();
+    console.log(`🔄 Batch scheduler is active and will manage automatic processing`);
   },
 );
