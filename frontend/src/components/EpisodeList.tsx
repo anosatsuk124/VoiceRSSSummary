@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 
 interface Episode {
   id: string
@@ -11,29 +12,82 @@ interface Episode {
   link: string
 }
 
+interface EpisodeWithFeedInfo {
+  id: string
+  title: string
+  description?: string
+  audioPath: string
+  duration?: number
+  fileSize?: number
+  createdAt: string
+  articleId: string
+  articleTitle: string
+  articleLink: string
+  articlePubDate: string
+  feedId: string
+  feedTitle?: string
+  feedUrl: string
+}
+
 function EpisodeList() {
-  const [episodes, setEpisodes] = useState<Episode[]>([])
+  const [episodes, setEpisodes] = useState<EpisodeWithFeedInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentAudio, setCurrentAudio] = useState<string | null>(null)
+  const [useDatabase, setUseDatabase] = useState(true)
 
   useEffect(() => {
     fetchEpisodes()
-  }, [])
+  }, [useDatabase])
 
   const fetchEpisodes = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/episodes-from-xml')
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'エピソードの取得に失敗しました')
+      
+      if (useDatabase) {
+        // Try to fetch from database first
+        const response = await fetch('/api/episodes-with-feed-info')
+        if (!response.ok) {
+          throw new Error('データベースからの取得に失敗しました')
+        }
+        const data = await response.json()
+        setEpisodes(data.episodes || [])
+      } else {
+        // Fallback to XML parsing (existing functionality)
+        const response = await fetch('/api/episodes-from-xml')
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'エピソードの取得に失敗しました')
+        }
+        const data = await response.json()
+        console.log('Fetched episodes from XML:', data)
+        
+        // Convert XML episodes to EpisodeWithFeedInfo format
+        const xmlEpisodes = data.episodes || []
+        const convertedEpisodes: EpisodeWithFeedInfo[] = xmlEpisodes.map((episode: Episode) => ({
+          id: episode.id,
+          title: episode.title,
+          description: episode.description,
+          audioPath: episode.audioUrl,
+          createdAt: episode.pubDate,
+          articleId: episode.guid,
+          articleTitle: episode.title,
+          articleLink: episode.link,
+          articlePubDate: episode.pubDate,
+          feedId: '',
+          feedTitle: 'RSS Feed',
+          feedUrl: ''
+        }))
+        setEpisodes(convertedEpisodes)
       }
-      const data = await response.json()
-      console.log('Fetched episodes from XML:', data)
-      setEpisodes(data.episodes || [])
     } catch (err) {
       console.error('Episode fetch error:', err)
+      if (useDatabase) {
+        // Fallback to XML if database fails
+        console.log('Falling back to XML parsing...')
+        setUseDatabase(false)
+        return
+      }
       setError(err instanceof Error ? err.message : 'エラーが発生しました')
     } finally {
       setLoading(false)
@@ -44,7 +98,7 @@ function EpisodeList() {
     return new Date(dateString).toLocaleString('ja-JP')
   }
 
-  const playAudio = (audioUrl: string) => {
+  const playAudio = (audioPath: string) => {
     if (currentAudio) {
       const currentPlayer = document.getElementById(currentAudio) as HTMLAudioElement
       if (currentPlayer) {
@@ -52,10 +106,10 @@ function EpisodeList() {
         currentPlayer.currentTime = 0
       }
     }
-    setCurrentAudio(audioUrl)
+    setCurrentAudio(audioPath)
   }
 
-  const shareEpisode = (episode: Episode) => {
+  const shareEpisode = (episode: EpisodeWithFeedInfo) => {
     const shareUrl = `${window.location.origin}/episode/${episode.id}`
     navigator.clipboard.writeText(shareUrl).then(() => {
       alert('エピソードリンクをクリップボードにコピーしました')
@@ -69,6 +123,21 @@ function EpisodeList() {
       document.body.removeChild(textArea)
       alert('エピソードリンクをクリップボードにコピーしました')
     })
+  }
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return ''
+    
+    const units = ['B', 'KB', 'MB', 'GB']
+    let unitIndex = 0
+    let fileSize = bytes
+
+    while (fileSize >= 1024 && unitIndex < units.length - 1) {
+      fileSize /= 1024
+      unitIndex++
+    }
+
+    return `${fileSize.toFixed(1)} ${units[unitIndex]}`
   }
 
   if (loading) {
@@ -109,7 +178,7 @@ function EpisodeList() {
           <tr>
             <th style={{ width: '35%' }}>タイトル</th>
             <th style={{ width: '25%' }}>説明</th>
-            <th style={{ width: '15%' }}>公開日</th>
+            <th style={{ width: '15%' }}>作成日</th>
             <th style={{ width: '25%' }}>操作</th>
           </tr>
         </thead>
@@ -118,11 +187,28 @@ function EpisodeList() {
             <tr key={episode.id}>
               <td>
                 <div style={{ marginBottom: '8px' }}>
-                  <strong>{episode.title}</strong>
+                  <strong>
+                    <Link 
+                      to={`/episode/${episode.id}`}
+                      style={{ textDecoration: 'none', color: '#007bff' }}
+                    >
+                      {episode.title}
+                    </Link>
+                  </strong>
                 </div>
-                {episode.link && (
+                {episode.feedTitle && (
+                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                    フィード: <Link to={`/feeds/${episode.feedId}`} style={{ color: '#007bff' }}>{episode.feedTitle}</Link>
+                  </div>
+                )}
+                {episode.articleTitle && episode.articleTitle !== episode.title && (
+                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                    元記事: <strong>{episode.articleTitle}</strong>
+                  </div>
+                )}
+                {episode.articleLink && (
                   <a 
-                    href={episode.link} 
+                    href={episode.articleLink} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     style={{ fontSize: '12px', color: '#666' }}
@@ -141,14 +227,19 @@ function EpisodeList() {
                 }}>
                   {episode.description || 'No description'}
                 </div>
+                {episode.fileSize && (
+                  <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                    {formatFileSize(episode.fileSize)}
+                  </div>
+                )}
               </td>
-              <td>{formatDate(episode.pubDate)}</td>
+              <td>{formatDate(episode.createdAt)}</td>
               <td>
                 <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button 
                       className="btn btn-primary"
-                      onClick={() => playAudio(episode.audioUrl)}
+                      onClick={() => playAudio(episode.audioPath)}
                     >
                       再生
                     </button>
@@ -159,13 +250,13 @@ function EpisodeList() {
                       共有
                     </button>
                   </div>
-                  {currentAudio === episode.audioUrl && (
+                  {currentAudio === episode.audioPath && (
                     <div>
                       <audio
-                        id={episode.audioUrl}
+                        id={episode.audioPath}
                         controls
                         className="audio-player"
-                        src={episode.audioUrl}
+                        src={episode.audioPath}
                         onEnded={() => setCurrentAudio(null)}
                       />
                     </div>

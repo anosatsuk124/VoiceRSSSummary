@@ -145,6 +145,24 @@ export interface LegacyEpisode {
   sourceLink: string;
 }
 
+// Extended interfaces for frontend display
+export interface EpisodeWithFeedInfo {
+  id: string;
+  title: string;
+  description?: string;
+  audioPath: string;
+  duration?: number;
+  fileSize?: number;
+  createdAt: string;
+  articleId: string;
+  articleTitle: string;
+  articleLink: string;
+  articlePubDate: string;
+  feedId: string;
+  feedTitle?: string;
+  feedUrl: string;
+}
+
 // Feed management functions
 export async function saveFeed(
   feed: Omit<Feed, "id" | "createdAt">,
@@ -232,6 +250,161 @@ export async function getAllFeeds(): Promise<Feed[]> {
     }));
   } catch (error) {
     console.error("Error getting all feeds:", error);
+    throw error;
+  }
+}
+
+// Get active feeds for user display
+export async function fetchActiveFeeds(): Promise<Feed[]> {
+  return getAllFeeds();
+}
+
+// Get episodes with feed information for enhanced display
+export async function fetchEpisodesWithFeedInfo(): Promise<EpisodeWithFeedInfo[]> {
+  try {
+    const stmt = db.prepare(`
+      SELECT 
+        e.id,
+        e.title,
+        e.description,
+        e.audio_path as audioPath,
+        e.duration,
+        e.file_size as fileSize,
+        e.created_at as createdAt,
+        e.article_id as articleId,
+        a.title as articleTitle,
+        a.link as articleLink,
+        a.pub_date as articlePubDate,
+        f.id as feedId,
+        f.title as feedTitle,
+        f.url as feedUrl
+      FROM episodes e
+      JOIN articles a ON e.article_id = a.id
+      JOIN feeds f ON a.feed_id = f.id
+      WHERE f.active = 1
+      ORDER BY e.created_at DESC
+    `);
+
+    const rows = stmt.all() as any[];
+
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      audioPath: row.audioPath,
+      duration: row.duration,
+      fileSize: row.fileSize,
+      createdAt: row.createdAt,
+      articleId: row.articleId,
+      articleTitle: row.articleTitle,
+      articleLink: row.articleLink,
+      articlePubDate: row.articlePubDate,
+      feedId: row.feedId,
+      feedTitle: row.feedTitle,
+      feedUrl: row.feedUrl,
+    }));
+  } catch (error) {
+    console.error("Error fetching episodes with feed info:", error);
+    throw error;
+  }
+}
+
+// Get episodes by feed ID
+export async function fetchEpisodesByFeedId(feedId: string): Promise<EpisodeWithFeedInfo[]> {
+  try {
+    const stmt = db.prepare(`
+      SELECT 
+        e.id,
+        e.title,
+        e.description,
+        e.audio_path as audioPath,
+        e.duration,
+        e.file_size as fileSize,
+        e.created_at as createdAt,
+        e.article_id as articleId,
+        a.title as articleTitle,
+        a.link as articleLink,
+        a.pub_date as articlePubDate,
+        f.id as feedId,
+        f.title as feedTitle,
+        f.url as feedUrl
+      FROM episodes e
+      JOIN articles a ON e.article_id = a.id
+      JOIN feeds f ON a.feed_id = f.id
+      WHERE f.id = ? AND f.active = 1
+      ORDER BY e.created_at DESC
+    `);
+
+    const rows = stmt.all(feedId) as any[];
+
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      audioPath: row.audioPath,
+      duration: row.duration,
+      fileSize: row.fileSize,
+      createdAt: row.createdAt,
+      articleId: row.articleId,
+      articleTitle: row.articleTitle,
+      articleLink: row.articleLink,
+      articlePubDate: row.articlePubDate,
+      feedId: row.feedId,
+      feedTitle: row.feedTitle,
+      feedUrl: row.feedUrl,
+    }));
+  } catch (error) {
+    console.error("Error fetching episodes by feed ID:", error);
+    throw error;
+  }
+}
+
+// Get single episode with source information
+export async function fetchEpisodeWithSourceInfo(episodeId: string): Promise<EpisodeWithFeedInfo | null> {
+  try {
+    const stmt = db.prepare(`
+      SELECT 
+        e.id,
+        e.title,
+        e.description,
+        e.audio_path as audioPath,
+        e.duration,
+        e.file_size as fileSize,
+        e.created_at as createdAt,
+        e.article_id as articleId,
+        a.title as articleTitle,
+        a.link as articleLink,
+        a.pub_date as articlePubDate,
+        f.id as feedId,
+        f.title as feedTitle,
+        f.url as feedUrl
+      FROM episodes e
+      JOIN articles a ON e.article_id = a.id
+      JOIN feeds f ON a.feed_id = f.id
+      WHERE e.id = ?
+    `);
+
+    const row = stmt.get(episodeId) as any;
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      audioPath: row.audioPath,
+      duration: row.duration,
+      fileSize: row.fileSize,
+      createdAt: row.createdAt,
+      articleId: row.articleId,
+      articleTitle: row.articleTitle,
+      articleLink: row.articleLink,
+      articlePubDate: row.articlePubDate,
+      feedId: row.feedId,
+      feedTitle: row.feedTitle,
+      feedUrl: row.feedUrl,
+    };
+  } catch (error) {
+    console.error("Error fetching episode with source info:", error);
     throw error;
   }
 }

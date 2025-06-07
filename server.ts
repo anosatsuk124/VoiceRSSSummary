@@ -219,6 +219,74 @@ app.get("/api/episode/:episodeId", async (c) => {
   }
 });
 
+app.get("/api/feeds", async (c) => {
+  try {
+    const { fetchActiveFeeds } = await import("./services/database.js");
+    const feeds = await fetchActiveFeeds();
+    return c.json({ feeds });
+  } catch (error) {
+    console.error("Error fetching feeds:", error);
+    return c.json({ error: "Failed to fetch feeds" }, 500);
+  }
+});
+
+app.get("/api/feeds/:feedId", async (c) => {
+  try {
+    const feedId = c.req.param("feedId");
+    const { getFeedById } = await import("./services/database.js");
+    const feed = await getFeedById(feedId);
+    
+    if (!feed) {
+      return c.json({ error: "Feed not found" }, 404);
+    }
+    
+    return c.json({ feed });
+  } catch (error) {
+    console.error("Error fetching feed:", error);
+    return c.json({ error: "Failed to fetch feed" }, 500);
+  }
+});
+
+app.get("/api/feeds/:feedId/episodes", async (c) => {
+  try {
+    const feedId = c.req.param("feedId");
+    const { fetchEpisodesByFeedId } = await import("./services/database.js");
+    const episodes = await fetchEpisodesByFeedId(feedId);
+    return c.json({ episodes });
+  } catch (error) {
+    console.error("Error fetching episodes by feed:", error);
+    return c.json({ error: "Failed to fetch episodes by feed" }, 500);
+  }
+});
+
+app.get("/api/episodes-with-feed-info", async (c) => {
+  try {
+    const { fetchEpisodesWithFeedInfo } = await import("./services/database.js");
+    const episodes = await fetchEpisodesWithFeedInfo();
+    return c.json({ episodes });
+  } catch (error) {
+    console.error("Error fetching episodes with feed info:", error);
+    return c.json({ error: "Failed to fetch episodes with feed info" }, 500);
+  }
+});
+
+app.get("/api/episode-with-source/:episodeId", async (c) => {
+  try {
+    const episodeId = c.req.param("episodeId");
+    const { fetchEpisodeWithSourceInfo } = await import("./services/database.js");
+    const episode = await fetchEpisodeWithSourceInfo(episodeId);
+    
+    if (!episode) {
+      return c.json({ error: "Episode not found" }, 404);
+    }
+    
+    return c.json({ episode });
+  } catch (error) {
+    console.error("Error fetching episode with source info:", error);
+    return c.json({ error: "Failed to fetch episode with source info" }, 500);
+  }
+});
+
 app.post("/api/feed-requests", async (c) => {
   try {
     const body = await c.req.json();
