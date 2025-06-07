@@ -3,7 +3,6 @@ import { dirname } from "path";
 import {
   Episode,
   fetchAllEpisodes,
-  fetchEpisodesWithFeedInfo,
   performDatabaseIntegrityFixes,
 } from "./database.js";
 import path from "node:path";
@@ -19,7 +18,7 @@ function escapeXml(text: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function createItemXml(episode: any): string {
+function createItemXml(episode: Episode): string {
   const fileUrl = `${config.podcast.baseUrl}/podcast_audio/${path.basename(episode.audioPath)}`;
   const pubDate = new Date(episode.createdAt).toUTCString();
 
@@ -47,17 +46,12 @@ function createItemXml(episode: any): string {
       <enclosure url="${escapeXml(fileUrl)}" length="${fileSize}" type="audio/mpeg" />
       <guid>${escapeXml(fileUrl)}</guid>
       <pubDate>${pubDate}</pubDate>
-      <source:feedTitle><![CDATA[${escapeXml(episode.feedTitle || '')}]]></source:feedTitle>
-      <source:feedUrl>${escapeXml(episode.feedUrl || '')}</source:feedUrl>
-      <source:articleTitle><![CDATA[${escapeXml(episode.articleTitle || '')}]]></source:articleTitle>
-      <source:articleLink>${escapeXml(episode.articleLink || '')}</source:articleLink>
-      <source:articlePubDate>${episode.articlePubDate || ''}</source:articlePubDate>
     </item>`;
 }
 
 export async function updatePodcastRSS(): Promise<void> {
   try {
-    const episodes = await fetchEpisodesWithFeedInfo();
+    const episodes: Episode[] = await fetchAllEpisodes();
 
     // Filter episodes to only include those with valid audio files
     const validEpisodes = episodes.filter((episode) => {
@@ -83,7 +77,7 @@ export async function updatePodcastRSS(): Promise<void> {
 
     // Create RSS XML content
     const rssXml = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:source="http://source.example.com/podcast">
+<rss version="2.0">
   <channel>
     <title>${escapeXml(config.podcast.title)}</title>
     <link>${escapeXml(config.podcast.link)}</link>

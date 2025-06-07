@@ -722,6 +722,16 @@ export async function saveEpisode(
       createdAt,
     );
 
+    try {
+      performDatabaseIntegrityFixes(db);
+      console.log(`Episode saved: ${episode}`);
+    } catch (error) {
+      console.error(
+        "Error performing integrity fixes after saving feed:",
+        error,
+      );
+    }
+
     return id;
   } catch (error) {
     console.error("Error saving episode:", error);
