@@ -3,6 +3,7 @@ import "./app/globals.css";
 import Dashboard from "./components/Dashboard";
 import EpisodePlayer from "./components/EpisodePlayer";
 import FeedManager from "./components/FeedManager";
+import React from "react";
 
 type TabType = "dashboard" | "episodes" | "feeds";
 

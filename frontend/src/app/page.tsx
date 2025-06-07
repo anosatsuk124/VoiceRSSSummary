@@ -2,6 +2,7 @@ import { useState } from "react";
 import FeedManager from "../components/FeedManager";
 import EpisodePlayer from "../components/EpisodePlayer";
 import Dashboard from "../components/Dashboard";
+import React from "react";
 
 export const metadata = {
   title: "Voice RSS Summary",

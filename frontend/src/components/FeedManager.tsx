@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import React from "react";
 
 interface Feed {
   id: string;
@@ -76,6 +77,7 @@ export default function FeedManager() {
       }
     } catch (err) {
       alert("エラーが発生しました");
+      console.error("Feed addition error:", err);
     } finally {
       setAddingFeed(false);
     }

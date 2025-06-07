@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import React from "react";
 
 interface Episode {
   id: string;
@@ -55,7 +56,7 @@ export default function EpisodePlayer() {
       audio.removeEventListener("loadedmetadata", updateDuration);
       audio.removeEventListener("ended", handleEnded);
     };
-  }, [selectedEpisode]);
+  }, [selectedEpisode, isPlaying, audioRef, currentTime, duration]);
 
   const fetchEpisodes = async () => {
     try {

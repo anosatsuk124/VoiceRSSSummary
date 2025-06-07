@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import React from "react";
 
 interface Stats {
   totalFeeds: number;
@@ -66,6 +67,7 @@ export default function Dashboard() {
       }
     } catch (error) {
       alert("エラーが発生しました。");
+      console.error("Batch process trigger error:", error);
     }
   };
 
